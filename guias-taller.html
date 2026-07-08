@@ -1820,24 +1820,9 @@ function renderMain(filteredList){
           <div class="msg-preview">${escapeHtml(buildMessage(g))}</div>
 
           <div class="btn-row">
-            <button class="btn btn-whatsapp" id="waBtn">Enviar por WhatsApp</button>
-            ${isMobileDevice() ? `<button class="btn btn-ghost" id="smsBtn">Enviar por SMS</button>` : ''}
-            <button class="btn btn-ghost" id="emailBtn">Enviar por correo</button>
             <button class="btn btn-ghost" id="copyBtn">Copiar mensaje</button>
           </div>
-          ${g.fechaEntrega ? `
-          <div class="btn-row">
-            <button class="btn btn-reminder" id="gcalBtn">🔔 Agregar recordatorio (Google Calendar)</button>
-            <button class="btn btn-ghost" id="icsBtn">Descargar recordatorio (.ics)</button>
-          </div>` : `<div class="hint-text">Agrega una fecha de entrega para poder crear un recordatorio.</div>`}
 
-          <div class="section-label">Avisar al cliente que está por vencer / listo</div>
-          <div class="msg-preview">${escapeHtml(buildReminderMessage(g))}</div>
-          <div class="btn-row">
-            <button class="btn btn-reminder" id="remindWaBtn">Avisar por WhatsApp</button>
-            ${isMobileDevice() ? `<button class="btn btn-ghost" id="remindSmsBtn">Avisar por SMS</button>` : ''}
-            <button class="btn btn-ghost" id="remindEmailBtn">Avisar por correo</button>
-          </div>
           <div class="btn-row">
             <button class="btn btn-ghost" id="editBtn">Editar guía</button>
             <button class="btn btn-ghost" id="labelBtn">🏷️ Imprimir etiqueta (prenda + comprobante)</button>
@@ -2317,48 +2302,11 @@ function attachListeners(){
     render();
   };
 
-  const waBtn = document.getElementById('waBtn');
-  if(waBtn) waBtn.onclick = ()=> sendWhatsApp(state.guias.find(g=>g.id===state.currentId));
-
-  const smsBtn = document.getElementById('smsBtn');
-  if(smsBtn) smsBtn.onclick = ()=> sendSMS(state.guias.find(g=>g.id===state.currentId));
-
-  const emailBtn = document.getElementById('emailBtn');
-  if(emailBtn) emailBtn.onclick = ()=> sendEmail(state.guias.find(g=>g.id===state.currentId));
-
   const copyBtn = document.getElementById('copyBtn');
   if(copyBtn) copyBtn.onclick = ()=> copyMessage(state.guias.find(g=>g.id===state.currentId));
 
   const editBtn = document.getElementById('editBtn');
   if(editBtn) editBtn.onclick = ()=> openEdit(state.currentId);
-
-  const gcalBtn = document.getElementById('gcalBtn');
-  if(gcalBtn) gcalBtn.onclick = ()=>{
-    const g = state.guias.find(x=>x.id===state.currentId);
-    window.open(gcalLink(g), '_blank');
-  };
-
-  const icsBtn = document.getElementById('icsBtn');
-  if(icsBtn) icsBtn.onclick = ()=>{
-    const g = state.guias.find(x=>x.id===state.currentId);
-    downloadICS(g);
-  };
-
-  const remindWaBtn = document.getElementById('remindWaBtn');
-  if(remindWaBtn) remindWaBtn.onclick = ()=>{
-    const g = state.guias.find(x=>x.id===state.currentId);
-    sendWhatsApp(g, buildReminderMessage(g));
-  };
-  const remindSmsBtn = document.getElementById('remindSmsBtn');
-  if(remindSmsBtn) remindSmsBtn.onclick = ()=>{
-    const g = state.guias.find(x=>x.id===state.currentId);
-    sendSMS(g, buildReminderMessage(g));
-  };
-  const remindEmailBtn = document.getElementById('remindEmailBtn');
-  if(remindEmailBtn) remindEmailBtn.onclick = ()=>{
-    const g = state.guias.find(x=>x.id===state.currentId);
-    sendEmail(g, buildReminderMessage(g), `Tu prenda está lista o por vencer — Guía N° ${g.folio}`);
-  };
 
   const printBtn = document.getElementById('printBtn');
   if(printBtn) printBtn.onclick = ()=> printFullGuideBW(state.guias.find(g=>g.id===state.currentId));
