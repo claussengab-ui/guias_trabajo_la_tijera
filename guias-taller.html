@@ -241,6 +241,10 @@
   .item-fecha-wrap input.item-fecha,.item-fecha-wrap input.item-hora,.item-fecha-wrap input.item-valor{
     padding:9px 10px;border:1px solid var(--line-strong);border-radius:7px;font-size:13px;font-family:inherit;width:100%;box-sizing:border-box;
   }
+  .valor-con-iva-cell{
+    padding:9px 10px;border:1px solid var(--line-strong);border-radius:7px;font-size:13px;font-weight:700;
+    background:var(--surface);color:var(--blue-dark);width:100%;box-sizing:border-box;
+  }
   .item-remove{
     border:none;background:none;color:var(--ink-soft);cursor:pointer;font-size:16px;
     width:30px;height:30px;border-radius:7px;flex-shrink:0;
@@ -449,6 +453,22 @@ function estadoColor(estado){
 function formatCLP(n){
   const v = Number(n)||0;
   return '$'+v.toLocaleString('es-CL');
+}
+
+const IVA_RATE = 0.19;
+function montoIVA(valorNeto){
+  return Math.round((Number(valorNeto)||0) * IVA_RATE);
+}
+function totalConIVA(valorNeto){
+  return (Number(valorNeto)||0) + montoIVA(valorNeto);
+}
+// El valor que se ingresa en la app es el precio FINAL (con IVA).
+// Estas funciones calculan hacia atrás el neto y el IVA contenido en ese precio.
+function valorSinIVA(valorConIVA){
+  return Math.round((Number(valorConIVA)||0) / (1+IVA_RATE));
+}
+function ivaDesdeConIVA(valorConIVA){
+  return (Number(valorConIVA)||0) - valorSinIVA(valorConIVA);
 }
 
 function formatDate(iso){
@@ -671,7 +691,7 @@ function addDaysISO(iso, n){
 }
 
 function gcalLink(g){
-  const saldo = (Number(g.valor)||0)-(Number(g.abono)||0);
+  const saldo = totalConIVA(g.valor) - (Number(g.abono)||0);
   const start = addDaysISO(g.fechaEntrega, 0);
   const end = addDaysISO(g.fechaEntrega, 1);
   const items = getItems(g);
@@ -682,7 +702,7 @@ function gcalLink(g){
 }
 
 function downloadICS(g){
-  const saldo = (Number(g.valor)||0)-(Number(g.abono)||0);
+  const saldo = totalConIVA(g.valor) - (Number(g.abono)||0);
   const start = addDaysISO(g.fechaEntrega, 0);
   const end = addDaysISO(g.fechaEntrega, 1);
   const items = getItems(g);
@@ -751,9 +771,21 @@ function renderItemsHTML(){
           <label>Valor</label>
           <input type="number" min="0" step="1" class="item-valor" data-field="valor" data-idx="${idx}" placeholder="$0" value="${it.valor||''}">
         </div>
+        <div class="item-fecha-wrap">
+          <label>Valor con IVA</label>
+          <div class="valor-con-iva-cell" data-idx="${idx}">${it.valor ? formatCLP(totalConIVA(it.valor)) : '$0'}</div>
+        </div>
       </div>
     </div>
-  `).join('') + `<div class="items-total-hint">Suma de servicios: <b>${formatCLP(sumaItemsValor())}</b></div>`;
+  `).join('') + `<div class="items-total-hint">Suma de servicios: <b>${formatCLP(sumaItemsValor())}</b> · Con IVA: <b>${formatCLP(totalConIVA(sumaItemsValor()))}</b></div>`;
+}
+
+function updateValorTotalHint(){
+  const valorGuiaInput = document.querySelector('input[name="valor"]');
+  const celda = document.getElementById('valorTotalIvaHint');
+  if(!valorGuiaInput || !celda) return;
+  const v = Number(valorGuiaInput.value)||0;
+  celda.textContent = formatCLP(totalConIVA(v));
 }
 
 function attachItemListeners(){
@@ -777,11 +809,16 @@ function attachItemListeners(){
     el.oninput = ()=>{
       const idx = Number(el.dataset.idx);
       formItems[idx].valor = Number(el.value)||0;
+      const celda = document.querySelector(`.valor-con-iva-cell[data-idx="${idx}"]`);
+      if(celda) celda.textContent = formatCLP(totalConIVA(formItems[idx].valor));
       const hint = document.querySelector('.items-total-hint');
-      if(hint) hint.innerHTML = `Suma de servicios: <b>${formatCLP(sumaItemsValor())}</b>`;
+      if(hint) hint.innerHTML = `Suma de servicios: <b>${formatCLP(sumaItemsValor())}</b> · Con IVA: <b>${formatCLP(totalConIVA(sumaItemsValor()))}</b>`;
       if(!formTotalCustom){
         const valorInput = document.querySelector('input[name="valor"]');
-        if(valorInput) valorInput.value = sumaItemsValor();
+        if(valorInput){
+          valorInput.value = sumaItemsValor();
+          updateValorTotalHint();
+        }
       }
     };
   });
@@ -816,7 +853,7 @@ function normalizePhone(raw){
 }
 
 function buildMessage(g){
-  const saldo = (Number(g.valor)||0) - (Number(g.abono)||0);
+  const saldo = totalConIVA(g.valor) - (Number(g.abono)||0);
   const items = getItems(g);
   const detalleTexto = items.map((it,i)=>{
     const fechaExtra = (it.fechaEntrega && it.fechaEntrega!==g.fechaEntrega) ? ` (Entrega: ${formatDateHora(it.fechaEntrega, it.horaEntrega)})` : '';
@@ -829,7 +866,7 @@ function buildMessage(g){
   `Fecha ingreso: ${formatDate(g.fechaCreacion)}\n`+
   `Entrega estimada: ${g.fechaEntrega ? formatDate(g.fechaEntrega) : 'Por confirmar'}\n\n`+
   `Detalle del trabajo (${items.length} prenda${items.length>1?'s':''}):\n${detalleTexto}\n\n`+
-  `Valor total: ${formatCLP(g.valor)}\n`+
+  `Total a cobrar (con IVA): ${formatCLP(totalConIVA(g.valor))}\n`+
   `Abono: ${formatCLP(g.abono)}\n`+
   `Saldo pendiente: ${formatCLP(saldo)}\n`+
   `Estado: ${g.estado}\n\n`+
@@ -837,7 +874,7 @@ function buildMessage(g){
 }
 
 function buildReminderMessage(g){
-  const saldo = (Number(g.valor)||0) - (Number(g.abono)||0);
+  const saldo = totalConIVA(g.valor) - (Number(g.abono)||0);
   const d = daysUntil(g.fechaEntrega);
   const cuando = d===0 ? 'hoy' : (d<0 ? `desde el ${formatDate(g.fechaEntrega)}` : `el ${formatDate(g.fechaEntrega)}`);
   const items = getItems(g);
@@ -1098,7 +1135,7 @@ function copyMessage(g){
 }
 
 function printAmbasGuias(g){
-  const saldo = (Number(g.valor)||0)-(Number(g.abono)||0);
+  const saldo = totalConIVA(g.valor) - (Number(g.abono)||0);
   const items = getItems(g);
 
   const filas = items.map((it,i)=>`
@@ -1107,7 +1144,7 @@ function printAmbasGuias(g){
       <td>${escapeHtml(it.prenda||'—')}</td>
       <td>${escapeHtml(it.detalle||'—')}</td>
       <td>${it.fechaEntrega?formatDateHora(it.fechaEntrega, it.horaEntrega):'—'}</td>
-      <td style="text-align:right;">${it.valor?formatCLP(it.valor):'—'}</td>
+      <td style="text-align:right;">${it.valor?formatCLP(totalConIVA(it.valor)):'—'}</td>
     </tr>
   `).join('');
 
@@ -1121,7 +1158,7 @@ function printAmbasGuias(g){
       <div class="work-box">
         <div class="work-title">👕 ${escapeHtml(it.prenda||'(sin nombre)')}</div>
         <div class="work-desc">${escapeHtml(it.detalle||'(sin descripción)')}</div>
-        ${it.valor ? `<div class="work-price">💲 ${formatCLP(it.valor)}</div>` : ''}
+        ${it.valor ? `<div class="work-price">💲 ${formatCLP(it.valor)} <span style="font-size:12px;font-weight:600;">(sin IVA)</span></div>` : ''}
       </div>
     </div>
     ${i<items.length-1 ? '<div class="cut-line"></div>' : ''}
@@ -1209,12 +1246,12 @@ function printAmbasGuias(g){
 
         <h3>Detalle del trabajo (${items.length} prenda${items.length>1?'s':''})</h3>
         <table class="items">
-          <tr><th style="width:24px;">#</th><th style="width:110px;">Prenda</th><th>Descripción</th><th style="width:80px;">Entrega</th><th style="width:70px;">Valor</th></tr>
+          <tr><th style="width:24px;">#</th><th style="width:110px;">Prenda</th><th>Descripción</th><th style="width:80px;">Entrega</th><th style="width:80px;">Valor</th></tr>
           ${filas}
         </table>
 
         <table class="valores">
-          <tr><td>Valor total</td><td style="text-align:right;">${formatCLP(g.valor)}</td></tr>
+          <tr><td><b>Total a pagar</b></td><td style="text-align:right;"><b>${formatCLP(totalConIVA(g.valor))}</b></td></tr>
           <tr><td>Abono</td><td style="text-align:right;">${formatCLP(g.abono)}</td></tr>
           <tr><td class="saldo-lbl">Saldo pendiente</td><td class="saldo-val" style="text-align:right;">${formatCLP(saldo)}</td></tr>
         </table>
@@ -1234,7 +1271,7 @@ function printAmbasGuias(g){
 }
 
 function printFullGuideBW(g){
-  const saldo = (Number(g.valor)||0)-(Number(g.abono)||0);
+  const saldo = totalConIVA(g.valor) - (Number(g.abono)||0);
   const items = getItems(g);
   const filas = items.map((it,i)=>`
     <tr>
@@ -1242,7 +1279,7 @@ function printFullGuideBW(g){
       <td>${escapeHtml(it.prenda||'—')}</td>
       <td>${escapeHtml(it.detalle||'—')}</td>
       <td>${it.fechaEntrega?formatDateHora(it.fechaEntrega, it.horaEntrega):'—'}</td>
-      <td style="text-align:right;">${it.valor?formatCLP(it.valor):'—'}</td>
+      <td style="text-align:right;">${it.valor?formatCLP(totalConIVA(it.valor)):'—'}</td>
     </tr>
   `).join('');
 
@@ -1302,12 +1339,12 @@ function printFullGuideBW(g){
 
       <h3>Detalle del trabajo (${items.length} prenda${items.length>1?'s':''})</h3>
       <table class="items">
-        <tr><th style="width:24px;">#</th><th style="width:110px;">Prenda</th><th>Descripción</th><th style="width:80px;">Entrega</th><th style="width:70px;">Valor</th></tr>
+        <tr><th style="width:24px;">#</th><th style="width:110px;">Prenda</th><th>Descripción</th><th style="width:80px;">Entrega</th><th style="width:80px;">Valor</th></tr>
         ${filas}
       </table>
 
       <table class="valores">
-        <tr><td>Valor total</td><td style="text-align:right;">${formatCLP(g.valor)}</td></tr>
+        <tr><td><b>Total a pagar</b></td><td style="text-align:right;"><b>${formatCLP(totalConIVA(g.valor))}</b></td></tr>
         <tr><td>Abono</td><td style="text-align:right;">${formatCLP(g.abono)}</td></tr>
         <tr><td class="saldo-lbl">Saldo pendiente</td><td class="saldo-val" style="text-align:right;">${formatCLP(saldo)}</td></tr>
       </table>
@@ -1321,7 +1358,7 @@ function printFullGuideBW(g){
 }
 
 function printLabel(g){
-  const saldo = (Number(g.valor)||0)-(Number(g.abono)||0);
+  const saldo = totalConIVA(g.valor) - (Number(g.abono)||0);
   const items = getItems(g);
   const win = window.open('', '_blank', 'width=460,height=700');
 
@@ -1335,7 +1372,7 @@ function printLabel(g){
       <div class="work-box">
         <div class="work-title">👕 ${escapeHtml(it.prenda||'(sin nombre)')}</div>
         <div class="work-desc">${escapeHtml(it.detalle||'(sin descripción)')}</div>
-        ${it.valor ? `<div class="work-price">💲 ${formatCLP(it.valor)}</div>` : ''}
+        ${it.valor ? `<div class="work-price">💲 ${formatCLP(it.valor)} <span style="font-size:12px;font-weight:600;">(sin IVA)</span></div>` : ''}
       </div>
     </div>
     <div class="cut-line"></div>
@@ -1382,7 +1419,8 @@ function printLabel(g){
         <div class="row">Ingreso: ${formatDate(g.fechaCreacion)}</div>
         <div class="row">Entrega: ${g.fechaEntrega?formatDate(g.fechaEntrega):'Por confirmar'}</div>
         ${comprobanteItems}
-        <div class="row">Valor: ${formatCLP(g.valor)} · Abono: ${formatCLP(g.abono)}</div>
+        <div class="row"><b>Total a pagar: ${formatCLP(totalConIVA(g.valor))}</b></div>
+        <div class="row">Abono: ${formatCLP(g.abono)}</div>
         <div class="row"><b>Saldo: ${formatCLP(saldo)}</b></div>
         <div class="label-small">Conserve este comprobante para retirar sus prendas</div>
         ${state.localPhone?`<div class="label-small">Contacto: ${escapeHtml(state.localPhone)}</div>`:''}
@@ -1452,7 +1490,7 @@ async function sendToAppsScript(g){
   if(!state.appsScriptUrl) return;
   try{
     const items = getItems(g);
-    const saldo = (Number(g.valor)||0) - (Number(g.abono)||0);
+    const saldo = totalConIVA(g.valor) - (Number(g.abono)||0);
     const detalleTexto = items.map((it,i)=>
       `${i+1}. ${it.prenda?it.prenda+' — ':''}${it.detalle||'(sin descripción)'}${it.valor?' — '+formatCLP(it.valor):''}`
     ).join('\n');
@@ -1503,15 +1541,15 @@ function csvEscape(val){
 }
 
 function exportBackupCSV(soloMes){
-  const headers = ['Folio','Cliente','Telefono','Email','Encargado','FechaIngreso','FechaEntrega','Estado','Prendas','ValorTotal','Abono','Saldo'];
+  const headers = ['Folio','Cliente','Telefono','Email','Encargado','FechaIngreso','FechaEntrega','Estado','Prendas','ValorNeto','IVA19','ValorConIVA','Abono','Saldo'];
   const guiasFiltradas = soloMes ? state.guias.filter(g=>(g.fechaCreacion||'').slice(0,7)===soloMes) : state.guias;
   const rows = guiasFiltradas.map(g=>{
-    const saldo = (Number(g.valor)||0)-(Number(g.abono)||0);
+    const saldo = totalConIVA(g.valor) - (Number(g.abono)||0);
     const prendas = getItems(g).map(it=>it.prenda).filter(Boolean).join(' | ');
     return [
       g.folio, g.clienteNombre, g.clienteTelefono||'', g.clienteEmail||'', g.encargado||'',
       formatDate(g.fechaCreacion), g.fechaEntrega?formatDate(g.fechaEntrega):'', g.estado,
-      prendas, g.valor||0, g.abono||0, saldo
+      prendas, g.valor||0, montoIVA(g.valor), totalConIVA(g.valor), g.abono||0, saldo
     ].map(csvEscape).join(',');
   });
   const csv = '\uFEFF'+[headers.join(','), ...rows].join('\n');
@@ -1674,7 +1712,7 @@ function render(){
                   <span class="mono" style="font-size:11px;">${formatDate(g.fechaCreacion)}</span>
                 </div>
                 <div class="name">${escapeHtml(g.clienteNombre)}</div>
-                <div class="meta"><span class="estado-dot" style="background:${estadoColor(g.estado)}"></span>${escapeHtml(g.estado)} · Saldo ${formatCLP((g.valor||0)-(g.abono||0))}${g.encargado?' · '+escapeHtml(g.encargado):''}</div>
+                <div class="meta"><span class="estado-dot" style="background:${estadoColor(g.estado)}"></span>${escapeHtml(g.estado)} · Saldo ${formatCLP(totalConIVA(g.valor)-(g.abono||0))}${g.encargado?' · '+escapeHtml(g.encargado):''}</div>
                 ${urg==='atrasado' ? `<div class="urg-tag urg-tag-late">Atrasado desde ${formatDate(g.fechaEntrega)}</div>` : ''}
                 ${urg==='hoy' ? `<div class="urg-tag urg-tag-today">Vence hoy</div>` : ''}
               </div>
@@ -1766,11 +1804,15 @@ function renderMain(filteredList){
           <div class="section-label">Valores</div>
           <div class="money-row">
             <div class="field">
-              <label>Valor total (CLP)</label>
+              <label>Valor total</label>
               <input type="number" name="valor" min="0" step="1" value="${g?.valor??''}">
             </div>
             <div class="field">
-              <label>Abono (CLP)</label>
+              <label>Valor total con IVA</label>
+              <div class="mono valor-con-iva-cell" id="valorTotalIvaHint" style="text-align:left;">${g?.valor ? `${formatCLP(totalConIVA(g.valor))}` : '$0'}</div>
+            </div>
+            <div class="field">
+              <label>Abono (CLP, con IVA)</label>
               <input type="number" name="abono" min="0" step="1" value="${g?.abono??''}">
             </div>
             <div class="field">
@@ -1793,7 +1835,7 @@ function renderMain(filteredList){
   if(state.view==='detail'){
     const g = state.guias.find(x=>x.id===state.currentId);
     if(!g) return renderEmpty();
-    const saldo = (Number(g.valor)||0)-(Number(g.abono)||0);
+    const saldo = totalConIVA(g.valor) - (Number(g.abono)||0);
     return `
       <button class="back-btn" id="backBtn">← Volver a la lista</button>
       <div class="ticket-paper">
@@ -1835,7 +1877,11 @@ function renderMain(filteredList){
 
           <div class="section-label">Valores</div>
           <div class="money-row">
-            <div><div class="k">Valor total</div><div class="v mono">${formatCLP(g.valor)}</div></div>
+            <div><div class="k">Valor (neto)</div><div class="v mono">${formatCLP(g.valor)}</div></div>
+            <div><div class="k">IVA (19%)</div><div class="v mono">${formatCLP(montoIVA(g.valor))}</div></div>
+            <div><div class="k">Total con IVA</div><div class="v mono">${formatCLP(totalConIVA(g.valor))}</div></div>
+          </div>
+          <div class="money-row">
             <div><div class="k">Abono</div><div class="v mono">${formatCLP(g.abono)}</div></div>
             <div><div class="k">Saldo</div><div class="saldo-box">${formatCLP(saldo)}</div></div>
           </div>
@@ -1968,7 +2014,7 @@ function renderPanelGeneral(list){
 
   const rows = sortGuias(list).map(g=>{
     const urg = guiaUrgency(g);
-    const saldo = (Number(g.valor)||0)-(Number(g.abono)||0);
+    const saldo = totalConIVA(g.valor) - (Number(g.abono)||0);
     const prendas = getItems(g).map(it=>it.prenda).filter(Boolean).join(', ') || '—';
     return `
       <tr class="panel-row" data-id="${g.id}">
@@ -2028,16 +2074,18 @@ function renderMonthReport(){
   const guiasDelMes = state.guias.filter(g=>(g.fechaCreacion||'').slice(0,7)===state.reportMonth);
 
   const totalGuias = guiasDelMes.length;
-  const valorTotal = guiasDelMes.reduce((s,g)=>s+(Number(g.valor)||0),0);
+  const valorNetoTotal = guiasDelMes.reduce((s,g)=>s+(Number(g.valor)||0),0);
+  const valorConIvaTotal = guiasDelMes.reduce((s,g)=>s+totalConIVA(g.valor),0);
+  const ivaTotal = valorConIvaTotal - valorNetoTotal;
   const abonoTotal = guiasDelMes.reduce((s,g)=>s+(Number(g.abono)||0),0);
-  const saldoTotal = valorTotal - abonoTotal;
+  const saldoTotal = valorConIvaTotal - abonoTotal;
   const totalPrendas = guiasDelMes.reduce((s,g)=>s+getItems(g).length,0);
 
   const porEstado = {};
   ESTADOS.forEach(e=>{ porEstado[e.id] = guiasDelMes.filter(g=>g.estado===e.id).length; });
 
   const filas = sortGuias(guiasDelMes).map(g=>{
-    const saldo = (Number(g.valor)||0)-(Number(g.abono)||0);
+    const saldo = totalConIVA(g.valor) - (Number(g.abono)||0);
     return `
       <tr class="panel-row" data-id="${g.id}">
         <td class="mono">${g.folio}</td>
@@ -2072,8 +2120,16 @@ function renderMonthReport(){
         <div class="lbl">Prendas totales</div>
       </div>
       <div class="summary-card">
-        <div class="num">${formatCLP(valorTotal)}</div>
-        <div class="lbl">Valor total facturado</div>
+        <div class="num">${formatCLP(valorConIvaTotal)}</div>
+        <div class="lbl">Total facturado (con IVA)</div>
+      </div>
+      <div class="summary-card">
+        <div class="num">${formatCLP(valorNetoTotal)}</div>
+        <div class="lbl">Valor neto (sin IVA)</div>
+      </div>
+      <div class="summary-card">
+        <div class="num">${formatCLP(ivaTotal)}</div>
+        <div class="lbl">IVA del mes (19%)</div>
       </div>
       <div class="summary-card">
         <div class="num">${formatCLP(abonoTotal)}</div>
@@ -2096,7 +2152,7 @@ function renderMonthReport(){
         <thead>
           <tr>
             <th>Folio</th><th>Ingreso</th><th>Cliente</th><th>Estado</th>
-            <th style="text-align:right;">Valor</th><th style="text-align:right;">Abono</th><th style="text-align:right;">Saldo</th>
+            <th style="text-align:right;">Valor (neto)</th><th style="text-align:right;">Abono</th><th style="text-align:right;">Saldo</th>
           </tr>
         </thead>
         <tbody>${filas || `<tr><td colspan="7" style="text-align:center;color:var(--ink-soft);padding:20px;">No hay guías ingresadas este mes.</td></tr>`}</tbody>
@@ -2197,8 +2253,8 @@ function renderSummary(){
         <div class="lbl">Abonado en ingresos de hoy</div>
       </div>
       <div class="summary-card">
-        <div class="num">${formatCLP(valorHoy)}</div>
-        <div class="lbl">Valor total agendado hoy</div>
+        <div class="num">${formatCLP(totalConIVA(valorHoy))}</div>
+        <div class="lbl">Valor total agendado hoy (con IVA)</div>
       </div>
     </div>
     <div class="summary-note">* Los montos de "hoy" se calculan sobre las guías creadas hoy. Si registras un abono en una guía de otro día, ese pago no queda separado por fecha.</div>
@@ -2231,7 +2287,10 @@ function attachListeners(){
 
   const valorGuiaInput = document.querySelector('input[name="valor"]');
   if(valorGuiaInput){
-    valorGuiaInput.oninput = ()=>{ formTotalCustom = true; };
+    valorGuiaInput.oninput = ()=>{
+      formTotalCustom = true;
+      updateValorTotalHint();
+    };
   }
 
   const gearBtn = document.getElementById('gearBtn');
