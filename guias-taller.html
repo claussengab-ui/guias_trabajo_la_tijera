@@ -1092,6 +1092,7 @@ function printAmbasGuias(g){
       <div class="work-box">
         <div class="work-title">👕 ${escapeHtml(it.prenda||'(sin nombre)')}</div>
         <div class="work-desc">${escapeHtml(it.detalle||'(sin descripción)')}</div>
+        ${it.valor ? `<div class="work-price">💲 ${formatCLP(it.valor)}</div>` : ''}
       </div>
     </div>
     ${i<items.length-1 ? '<div class="cut-line"></div>' : ''}
@@ -1146,6 +1147,7 @@ function printAmbasGuias(g){
       }
       .page-etiqueta .work-title{ font-size:22px; font-weight:800; color:#6B3AB0; margin-bottom:6px; }
       .page-etiqueta .work-desc{ font-size:18px; font-weight:700; color:#000; line-height:1.4; }
+      .page-etiqueta .work-price{ font-size:20px; font-weight:800; color:#6B3AB0; margin-top:6px; }
       .page-etiqueta .tag-qr-row{ text-align:center; }
       .page-etiqueta .cut-line{border-top:2px dashed #999;margin:14px 0;padding-top:4px;text-align:center;font-size:11px;color:#666;}
       .page-etiqueta .cut-line::before{content:"✂ ------------ cortar aquí ------------ ✂";}
@@ -1313,6 +1315,7 @@ function printLabel(g){
       <div class="work-box">
         <div class="work-title">👕 ${escapeHtml(it.prenda||'(sin nombre)')}</div>
         <div class="work-desc">${escapeHtml(it.detalle||'(sin descripción)')}</div>
+        ${it.valor ? `<div class="work-price">💲 ${formatCLP(it.valor)}</div>` : ''}
       </div>
     </div>
     <div class="cut-line"></div>
@@ -1338,6 +1341,7 @@ function printLabel(g){
       .work-box{ background:#F3EAFA; border:2px solid #a668e0; border-radius:8px; padding:12px 14px; margin-bottom:10px; }
       .work-title{ font-size:22px; font-weight:800; color:#6B3AB0; margin-bottom:6px; }
       .work-desc{ font-size:18px; font-weight:700; color:#000; line-height:1.4; }
+      .work-price{ font-size:20px; font-weight:800; color:#6B3AB0; margin-top:6px; }
       .tag-qr-row{ text-align:center; }
       .cut-line{ border-top:2px dashed #999; margin:14px 0; padding-top:4px; text-align:center; font-size:11px; color:#666; }
       .cut-line::before{ content:"✂ ------------ cortar aquí ------------ ✂"; }
