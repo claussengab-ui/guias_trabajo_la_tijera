@@ -217,32 +217,40 @@
   }
   .autofill-btn:hover{background:var(--blue-dark);}
 
-  .item-row{
-    display:grid;grid-template-columns:22px 140px 1fr 105px 90px 28px;gap:8px;align-items:start;
-    margin-bottom:8px;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px;
+  .item-card{
+    background:var(--bg);border:1px solid var(--line);border-radius:10px;
+    padding:12px 14px;margin-bottom:12px;
   }
+  .item-card-top{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
   .item-num{
     font-family:'Inter',sans-serif;font-variant-numeric:tabular-nums;font-size:12px;color:var(--ink-soft);
-    background:var(--surface);border-radius:50%;width:22px;height:22px;display:flex;
-    align-items:center;justify-content:center;border:1px solid var(--line-strong);margin-top:2px;
+    background:var(--surface);border-radius:50%;width:24px;height:24px;display:flex;flex-shrink:0;
+    align-items:center;justify-content:center;border:1px solid var(--line-strong);
   }
-  .item-row input.item-prenda{padding:8px 9px;border:1px solid var(--line-strong);border-radius:6px;font-size:13px;font-family:inherit;}
-  .item-row textarea.item-detalle{padding:8px 9px;border:1px solid var(--line-strong);border-radius:6px;font-size:13px;font-family:inherit;min-height:44px;resize:vertical;}
-  .item-fecha-wrap{display:flex;flex-direction:column;gap:3px;}
-  .item-fecha-wrap label{font-size:10px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.03em;}
-  .item-fecha-wrap input.item-fecha,.item-fecha-wrap input.item-valor{padding:7px 6px;border:1px solid var(--line-strong);border-radius:6px;font-size:12px;font-family:inherit;width:100%;}
+  .item-card input.item-prenda{
+    flex:1;padding:10px 12px;border:1px solid var(--line-strong);border-radius:7px;
+    font-size:14px;font-weight:600;font-family:inherit;
+  }
+  .item-card textarea.item-detalle{
+    width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid var(--line-strong);border-radius:7px;
+    font-size:13.5px;font-family:inherit;min-height:56px;resize:vertical;margin-bottom:10px;
+  }
+  .item-card-bottom{display:flex;gap:12px;flex-wrap:wrap;}
+  .item-fecha-wrap{display:flex;flex-direction:column;gap:4px;flex:1;min-width:130px;}
+  .item-fecha-wrap label{font-size:10.5px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.03em;font-weight:600;}
+  .item-fecha-wrap input.item-fecha,.item-fecha-wrap input.item-hora,.item-fecha-wrap input.item-valor{
+    padding:9px 10px;border:1px solid var(--line-strong);border-radius:7px;font-size:13px;font-family:inherit;width:100%;box-sizing:border-box;
+  }
   .item-remove{
-    border:none;background:none;color:var(--ink-soft);cursor:pointer;font-size:14px;
-    width:28px;height:28px;border-radius:6px;
+    border:none;background:none;color:var(--ink-soft);cursor:pointer;font-size:16px;
+    width:30px;height:30px;border-radius:7px;flex-shrink:0;
   }
   .item-remove:hover{background:#fbeceb;color:var(--red);}
-  .item-remove-spacer{width:28px;display:inline-block;}
-  .items-total-hint{font-size:12.5px;color:var(--ink-soft);text-align:right;margin:2px 4px 10px;}
-  @media (max-width:760px){
-    .item-row{grid-template-columns:22px 1fr 28px;}
-    .item-row input.item-prenda{grid-column:2/3;}
-    .item-row textarea.item-detalle{grid-column:2/3;}
-    .item-fecha-wrap{grid-column:2/3;}
+  .item-remove-spacer{width:30px;display:inline-block;flex-shrink:0;}
+  .items-total-hint{font-size:13px;color:var(--ink-soft);text-align:right;margin:2px 4px 10px;}
+  @media (max-width:640px){
+    .item-card-bottom{flex-direction:column;}
+    .item-fecha-wrap{min-width:0;}
   }
 
   .detail-item-row{
@@ -427,7 +435,8 @@ let state = {
   mobileDetail:false,
   simpleMode:false,
   simpleSearch:'',
-  calendarMonth: new Date().getFullYear()+'-'+String(new Date().getMonth()+1).padStart(2,'0')
+  calendarMonth: new Date().getFullYear()+'-'+String(new Date().getMonth()+1).padStart(2,'0'),
+  reportMonth: new Date().getFullYear()+'-'+String(new Date().getMonth()+1).padStart(2,'0')
 };
 
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
@@ -450,6 +459,11 @@ function formatDate(iso){
   return `${d}-${m}-${y}`;
 }
 
+function formatDateHora(fecha, hora){
+  if(!fecha) return '';
+  return formatDate(fecha) + (hora ? ' ' + hora : '');
+}
+
 function todayISO(){
   const d = new Date();
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
@@ -464,6 +478,7 @@ function getItems(g){
     prenda: it.prenda||'',
     detalle: it.detalle||'',
     fechaEntrega: it.fechaEntrega || g.fechaEntrega || '',
+    horaEntrega: it.horaEntrega || '',
     fechaCustom: !!it.fechaCustom,
     valor: Number(it.valor)||0
   }));
@@ -607,7 +622,7 @@ function renderScanner(){
 
 
 function initFormItems(g){
-  return getItems(g||{}).map(i=>({prenda:i.prenda||'', detalle:i.detalle||'', fechaEntrega:i.fechaEntrega||'', fechaCustom:!!i.fechaCustom, valor:i.valor||0}));
+  return getItems(g||{}).map(i=>({prenda:i.prenda||'', detalle:i.detalle||'', fechaEntrega:i.fechaEntrega||'', horaEntrega:i.horaEntrega||'', fechaCustom:!!i.fechaCustom, valor:i.valor||0}));
 }
 
 function sumaItemsValor(){
@@ -716,19 +731,27 @@ function estadoActionLabel(next){
 
 function renderItemsHTML(){
   return formItems.map((it,idx)=>`
-    <div class="item-row" data-idx="${idx}">
-      <span class="item-num">${idx+1}</span>
-      <input class="item-prenda" data-field="prenda" data-idx="${idx}" placeholder="Prenda (ej: Pantalón azul)" value="${escapeHtml(it.prenda)}">
+    <div class="item-card" data-idx="${idx}">
+      <div class="item-card-top">
+        <span class="item-num">${idx+1}</span>
+        <input class="item-prenda" data-field="prenda" data-idx="${idx}" placeholder="Prenda (ej: Pantalón azul)" value="${escapeHtml(it.prenda)}">
+        ${formItems.length>1 ? `<button type="button" class="item-remove" data-remove-idx="${idx}" title="Quitar esta prenda">✕</button>` : `<span class="item-remove-spacer"></span>`}
+      </div>
       <textarea class="item-detalle" data-field="detalle" data-idx="${idx}" placeholder="Descripción del trabajo (ej: Ajustar pierna, basta)">${escapeHtml(it.detalle)}</textarea>
-      <div class="item-fecha-wrap">
-        <label>Entrega</label>
-        <input type="date" class="item-fecha" data-field="fechaEntrega" data-idx="${idx}" value="${it.fechaEntrega||''}">
+      <div class="item-card-bottom">
+        <div class="item-fecha-wrap">
+          <label>Fecha de entrega</label>
+          <input type="date" class="item-fecha" data-field="fechaEntrega" data-idx="${idx}" value="${it.fechaEntrega||''}">
+        </div>
+        <div class="item-fecha-wrap">
+          <label>Hora de entrega</label>
+          <input type="time" class="item-hora" data-field="horaEntrega" data-idx="${idx}" value="${it.horaEntrega||''}">
+        </div>
+        <div class="item-fecha-wrap">
+          <label>Valor</label>
+          <input type="number" min="0" step="1" class="item-valor" data-field="valor" data-idx="${idx}" placeholder="$0" value="${it.valor||''}">
+        </div>
       </div>
-      <div class="item-fecha-wrap">
-        <label>Valor</label>
-        <input type="number" min="0" step="1" class="item-valor" data-field="valor" data-idx="${idx}" placeholder="$0" value="${it.valor||''}">
-      </div>
-      ${formItems.length>1 ? `<button type="button" class="item-remove" data-remove-idx="${idx}" title="Quitar esta prenda">✕</button>` : `<span class="item-remove-spacer"></span>`}
     </div>
   `).join('') + `<div class="items-total-hint">Suma de servicios: <b>${formatCLP(sumaItemsValor())}</b></div>`;
 }
@@ -742,6 +765,12 @@ function attachItemListeners(){
       const idx = Number(el.dataset.idx);
       formItems[idx].fechaEntrega = el.value;
       formItems[idx].fechaCustom = true;
+    };
+  });
+  document.querySelectorAll('.item-hora').forEach(el=>{
+    el.oninput = ()=>{
+      const idx = Number(el.dataset.idx);
+      formItems[idx].horaEntrega = el.value;
     };
   });
   document.querySelectorAll('.item-valor').forEach(el=>{
@@ -790,7 +819,7 @@ function buildMessage(g){
   const saldo = (Number(g.valor)||0) - (Number(g.abono)||0);
   const items = getItems(g);
   const detalleTexto = items.map((it,i)=>{
-    const fechaExtra = (it.fechaEntrega && it.fechaEntrega!==g.fechaEntrega) ? ` (Entrega: ${formatDate(it.fechaEntrega)})` : '';
+    const fechaExtra = (it.fechaEntrega && it.fechaEntrega!==g.fechaEntrega) ? ` (Entrega: ${formatDateHora(it.fechaEntrega, it.horaEntrega)})` : '';
     const valorExtra = it.valor ? ` — ${formatCLP(it.valor)}` : '';
     return `${i+1}. ${it.prenda?it.prenda+' — ':''}${it.detalle||'(sin descripción)'}${fechaExtra}${valorExtra}`;
   }).join('\n');
@@ -948,7 +977,7 @@ function openNewForm(){
   state.editingId=null;
   state.currentId=null;
   state.mobileDetail=true;
-  formItems = [{prenda:'', detalle:'', fechaEntrega:'', fechaCustom:false, valor:0}];
+  formItems = [{prenda:'', detalle:'', fechaEntrega:'', horaEntrega:'', fechaCustom:false, valor:0}];
   formTotalCustom = false;
   render();
 }
@@ -983,7 +1012,7 @@ function saveForm(e){
   e.preventDefault();
   const f = e.target;
   const items = formItems
-    .map(it=>({prenda:(it.prenda||'').trim(), detalle:(it.detalle||'').trim(), fechaEntrega: it.fechaEntrega||'', fechaCustom: !!it.fechaCustom, valor: Number(it.valor)||0}))
+    .map(it=>({prenda:(it.prenda||'').trim(), detalle:(it.detalle||'').trim(), fechaEntrega: it.fechaEntrega||'', horaEntrega: it.horaEntrega||'', fechaCustom: !!it.fechaCustom, valor: Number(it.valor)||0}))
     .filter(it=>it.prenda || it.detalle);
   const data = {
     clienteNombre: f.clienteNombre.value.trim(),
@@ -1077,7 +1106,7 @@ function printAmbasGuias(g){
       <td>${i+1}</td>
       <td>${escapeHtml(it.prenda||'—')}</td>
       <td>${escapeHtml(it.detalle||'—')}</td>
-      <td>${it.fechaEntrega?formatDate(it.fechaEntrega):'—'}</td>
+      <td>${it.fechaEntrega?formatDateHora(it.fechaEntrega, it.horaEntrega):'—'}</td>
       <td style="text-align:right;">${it.valor?formatCLP(it.valor):'—'}</td>
     </tr>
   `).join('');
@@ -1086,7 +1115,7 @@ function printAmbasGuias(g){
     <div class="tag-card">
       <div class="tag-top">
         <div class="tag-folio">N° ${g.folio}${items.length>1?` <span class="tag-sub">Prenda ${i+1}/${items.length}</span>`:''}</div>
-        <div class="date-badge">📅 ${it.fechaEntrega?formatDate(it.fechaEntrega):'Por confirmar'}</div>
+        <div class="date-badge">📅 ${it.fechaEntrega?formatDateHora(it.fechaEntrega, it.horaEntrega):'Por confirmar'}</div>
       </div>
       <div class="tag-client">${escapeHtml(g.clienteNombre)} · Ingreso: ${formatDate(g.fechaCreacion)}</div>
       <div class="work-box">
@@ -1212,7 +1241,7 @@ function printFullGuideBW(g){
       <td>${i+1}</td>
       <td>${escapeHtml(it.prenda||'—')}</td>
       <td>${escapeHtml(it.detalle||'—')}</td>
-      <td>${it.fechaEntrega?formatDate(it.fechaEntrega):'—'}</td>
+      <td>${it.fechaEntrega?formatDateHora(it.fechaEntrega, it.horaEntrega):'—'}</td>
       <td style="text-align:right;">${it.valor?formatCLP(it.valor):'—'}</td>
     </tr>
   `).join('');
@@ -1300,7 +1329,7 @@ function printLabel(g){
     <div class="tag-card">
       <div class="tag-top">
         <div class="tag-folio">N° ${g.folio}${items.length>1?` <span class="tag-sub">Prenda ${i+1}/${items.length}</span>`:''}</div>
-        <div class="date-badge">📅 ${it.fechaEntrega?formatDate(it.fechaEntrega):'Por confirmar'}</div>
+        <div class="date-badge">📅 ${it.fechaEntrega?formatDateHora(it.fechaEntrega, it.horaEntrega):'Por confirmar'}</div>
       </div>
       <div class="tag-client">${escapeHtml(g.clienteNombre)} · Ingreso: ${formatDate(g.fechaCreacion)}</div>
       <div class="work-box">
@@ -1312,7 +1341,7 @@ function printLabel(g){
     <div class="cut-line"></div>
   `).join('');
 
-  const comprobanteItems = items.map((it,i)=>`<div class="row">${i+1}. ${escapeHtml(it.prenda?it.prenda+' — ':'')}${escapeHtml(it.detalle||'')}${it.fechaEntrega?' (Entrega: '+formatDate(it.fechaEntrega)+')':''}${it.valor?' — '+formatCLP(it.valor):''}</div>`).join('');
+  const comprobanteItems = items.map((it,i)=>`<div class="row">${i+1}. ${escapeHtml(it.prenda?it.prenda+' — ':'')}${escapeHtml(it.detalle||'')}${it.fechaEntrega?' (Entrega: '+formatDateHora(it.fechaEntrega, it.horaEntrega)+')':''}${it.valor?' — '+formatCLP(it.valor):''}</div>`).join('');
 
   win.document.write(`
     <html>
@@ -1473,9 +1502,10 @@ function csvEscape(val){
   return s;
 }
 
-function exportBackupCSV(){
+function exportBackupCSV(soloMes){
   const headers = ['Folio','Cliente','Telefono','Email','Encargado','FechaIngreso','FechaEntrega','Estado','Prendas','ValorTotal','Abono','Saldo'];
-  const rows = state.guias.map(g=>{
+  const guiasFiltradas = soloMes ? state.guias.filter(g=>(g.fechaCreacion||'').slice(0,7)===soloMes) : state.guias;
+  const rows = guiasFiltradas.map(g=>{
     const saldo = (Number(g.valor)||0)-(Number(g.abono)||0);
     const prendas = getItems(g).map(it=>it.prenda).filter(Boolean).join(' | ');
     return [
@@ -1485,8 +1515,8 @@ function exportBackupCSV(){
     ].map(csvEscape).join(',');
   });
   const csv = '\uFEFF'+[headers.join(','), ...rows].join('\n');
-  const fecha = todayISO();
-  downloadFile(`guias-${fecha}.csv`, csv, 'text/csv;charset=utf-8');
+  const nombreArchivo = soloMes ? `guias-${soloMes}.csv` : `guias-${todayISO()}.csv`;
+  downloadFile(nombreArchivo, csv, 'text/csv;charset=utf-8');
   toast('Tabla descargada');
 }
 
@@ -1559,6 +1589,7 @@ function render(){
       </div>
       <div style="display:flex;gap:8px;">
         <button class="gear" id="scanBtn" title="Escanear código QR de una prenda">📷</button>
+        <button class="gear" id="monthReportBtn" title="Reporte mensual">📈</button>
         <button class="gear" id="calendarBtn" title="Calendario de entregas">📅</button>
         <button class="gear" id="simpleModeBtn" title="Modo simple (botones grandes)">📱</button>
         <button class="gear" id="summaryBtn" title="Resumen del día">📊</button>
@@ -1667,6 +1698,9 @@ function renderMain(filteredList){
   }
   if(state.view==='calendar'){
     return renderCalendar();
+  }
+  if(state.view==='monthreport'){
+    return renderMonthReport();
   }
   if(state.view==='scanner'){
     return renderScanner();
@@ -1793,7 +1827,7 @@ function renderMain(filteredList){
               <div class="detail-item-row">
                 <div class="item-name">${escapeHtml(it.prenda||'(sin nombre)')}</div>
                 <div class="item-desc">${escapeHtml(it.detalle||'—')}</div>
-                <div class="item-entrega">${it.fechaEntrega?('Entrega: '+formatDate(it.fechaEntrega)):'Sin fecha'}${it.fechaCustom?' ✎':''}</div>
+                <div class="item-entrega">${it.fechaEntrega?('Entrega: '+formatDateHora(it.fechaEntrega, it.horaEntrega)):'Sin fecha'}${it.fechaCustom?' ✎':''}</div>
                 <div class="item-entrega">${it.valor?formatCLP(it.valor):'—'}</div>
               </div>
             `).join('')}
@@ -1987,6 +2021,90 @@ function renderPanelGeneral(list){
   `;
 }
 
+function renderMonthReport(){
+  const [y,m] = state.reportMonth.split('-').map(Number);
+  const monthNames = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+  const guiasDelMes = state.guias.filter(g=>(g.fechaCreacion||'').slice(0,7)===state.reportMonth);
+
+  const totalGuias = guiasDelMes.length;
+  const valorTotal = guiasDelMes.reduce((s,g)=>s+(Number(g.valor)||0),0);
+  const abonoTotal = guiasDelMes.reduce((s,g)=>s+(Number(g.abono)||0),0);
+  const saldoTotal = valorTotal - abonoTotal;
+  const totalPrendas = guiasDelMes.reduce((s,g)=>s+getItems(g).length,0);
+
+  const porEstado = {};
+  ESTADOS.forEach(e=>{ porEstado[e.id] = guiasDelMes.filter(g=>g.estado===e.id).length; });
+
+  const filas = sortGuias(guiasDelMes).map(g=>{
+    const saldo = (Number(g.valor)||0)-(Number(g.abono)||0);
+    return `
+      <tr class="panel-row" data-id="${g.id}">
+        <td class="mono">${g.folio}</td>
+        <td>${formatDate(g.fechaCreacion)}</td>
+        <td>${escapeHtml(g.clienteNombre)}</td>
+        <td><span class="estado-dot" style="background:${estadoColor(g.estado)}"></span>${escapeHtml(g.estado)}</td>
+        <td style="text-align:right;">${formatCLP(g.valor)}</td>
+        <td style="text-align:right;">${formatCLP(g.abono)}</td>
+        <td style="text-align:right;">${formatCLP(saldo)}</td>
+      </tr>
+    `;
+  }).join('');
+
+  const [py,pm] = m===1 ? [y-1,12] : [y,m-1];
+  const [ny,nm] = m===12 ? [y+1,1] : [y,m+1];
+
+  return `
+    <button class="back-btn" id="backBtn">← Volver a la lista</button>
+    <div class="cal-header">
+      <button class="btn btn-ghost" id="reportPrevBtn">← Mes anterior</button>
+      <h2 style="margin:0;font-size:18px;">Reporte de ${monthNames[m-1]} ${y}</h2>
+      <button class="btn btn-ghost" id="reportNextBtn">Mes siguiente →</button>
+    </div>
+
+    <div class="summary-grid">
+      <div class="summary-card">
+        <div class="num">${totalGuias}</div>
+        <div class="lbl">Guías ingresadas</div>
+      </div>
+      <div class="summary-card">
+        <div class="num">${totalPrendas}</div>
+        <div class="lbl">Prendas totales</div>
+      </div>
+      <div class="summary-card">
+        <div class="num">${formatCLP(valorTotal)}</div>
+        <div class="lbl">Valor total facturado</div>
+      </div>
+      <div class="summary-card">
+        <div class="num">${formatCLP(abonoTotal)}</div>
+        <div class="lbl">Abonado</div>
+      </div>
+      <div class="summary-card" style="border-color:var(--mustard);">
+        <div class="num" style="color:var(--mustard);">${formatCLP(saldoTotal)}</div>
+        <div class="lbl">Saldo pendiente del mes</div>
+      </div>
+    </div>
+
+    <div class="mono" style="font-size:11px;color:var(--ink-soft);margin:14px 0 4px;">Por estado: ${ESTADOS.map(e=>`${e.id} (${porEstado[e.id]})`).join(' · ')}</div>
+
+    <div style="margin:14px 0;">
+      <button class="btn btn-ghost" id="exportMonthCsvBtn">📊 Exportar este mes (.csv)</button>
+    </div>
+
+    <div style="overflow-x:auto;max-width:900px;">
+      <table class="panel-table">
+        <thead>
+          <tr>
+            <th>Folio</th><th>Ingreso</th><th>Cliente</th><th>Estado</th>
+            <th style="text-align:right;">Valor</th><th style="text-align:right;">Abono</th><th style="text-align:right;">Saldo</th>
+          </tr>
+        </thead>
+        <tbody>${filas || `<tr><td colspan="7" style="text-align:center;color:var(--ink-soft);padding:20px;">No hay guías ingresadas este mes.</td></tr>`}</tbody>
+      </table>
+    </div>
+  `;
+}
+
 function renderCalendar(){
   const [y,m] = state.calendarMonth.split('-').map(Number);
   const firstDay = new Date(y, m-1, 1);
@@ -2098,7 +2216,7 @@ function attachListeners(){
   const addItemBtn = document.getElementById('addItemBtn');
   if(addItemBtn) addItemBtn.onclick = ()=>{
     const fechaGuia = document.querySelector('input[name="fechaEntrega"]')?.value || '';
-    formItems.push({prenda:'', detalle:'', fechaEntrega:fechaGuia, fechaCustom:false, valor:0});
+    formItems.push({prenda:'', detalle:'', fechaEntrega:fechaGuia, horaEntrega:'', fechaCustom:false, valor:0});
     refreshItemsContainer();
   };
 
@@ -2177,6 +2295,26 @@ function attachListeners(){
 
   const calendarBtn = document.getElementById('calendarBtn');
   if(calendarBtn) calendarBtn.onclick = ()=>{ state.view='calendar'; state.mobileDetail=true; render(); };
+
+  const monthReportBtn = document.getElementById('monthReportBtn');
+  if(monthReportBtn) monthReportBtn.onclick = ()=>{ state.view='monthreport'; state.mobileDetail=true; render(); };
+
+  const reportPrevBtn = document.getElementById('reportPrevBtn');
+  if(reportPrevBtn) reportPrevBtn.onclick = ()=>{
+    const [y,m] = state.reportMonth.split('-').map(Number);
+    const [py,pm] = m===1 ? [y-1,12] : [y,m-1];
+    state.reportMonth = `${py}-${String(pm).padStart(2,'0')}`;
+    render();
+  };
+  const reportNextBtn = document.getElementById('reportNextBtn');
+  if(reportNextBtn) reportNextBtn.onclick = ()=>{
+    const [y,m] = state.reportMonth.split('-').map(Number);
+    const [ny,nm] = m===12 ? [y+1,1] : [y,m+1];
+    state.reportMonth = `${ny}-${String(nm).padStart(2,'0')}`;
+    render();
+  };
+  const exportMonthCsvBtn = document.getElementById('exportMonthCsvBtn');
+  if(exportMonthCsvBtn) exportMonthCsvBtn.onclick = ()=> exportBackupCSV(state.reportMonth);
 
   const calPrevBtn = document.getElementById('calPrevBtn');
   if(calPrevBtn) calPrevBtn.onclick = ()=>{
