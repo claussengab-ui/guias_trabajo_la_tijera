@@ -1160,6 +1160,11 @@ function printAmbasGuias(g){
         <div class="work-desc">${escapeHtml(it.detalle||'(sin descripción)')}</div>
         ${it.valor ? `<div class="work-price">💲 ${formatCLP(it.valor)} <span style="font-size:12px;font-weight:600;">(sin IVA)</span></div>` : ''}
       </div>
+      <div class="tag-payment">
+        <div>Total a pagar: <b>${formatCLP(totalConIVA(g.valor))}</b></div>
+        <div>Abono: <b>${formatCLP(g.abono)}</b></div>
+        <div>Saldo pendiente: <b>${formatCLP(saldo)}</b></div>
+      </div>
     </div>
     ${i<items.length-1 ? '<div class="cut-line"></div>' : ''}
   `).join('');
@@ -1214,6 +1219,10 @@ function printAmbasGuias(g){
       .page-etiqueta .work-title{ font-size:22px; font-weight:800; color:#6B3AB0; margin-bottom:6px; }
       .page-etiqueta .work-desc{ font-size:18px; font-weight:700; color:#000; line-height:1.4; }
       .page-etiqueta .work-price{ font-size:20px; font-weight:800; color:#6B3AB0; margin-top:6px; }
+      .page-etiqueta .tag-payment{
+        margin-top:10px;padding-top:8px;border-top:1px dashed #a668e0;font-size:15px;font-weight:600;color:#1a1a1a;
+      }
+      .page-etiqueta .tag-payment div{margin-bottom:2px;}
       .page-etiqueta .tag-qr-row{ text-align:center; }
       .page-etiqueta .cut-line{border-top:2px dashed #999;margin:14px 0;padding-top:4px;text-align:center;font-size:11px;color:#666;}
       .page-etiqueta .cut-line::before{content:"✂ ------------ cortar aquí ------------ ✂";}
@@ -1374,6 +1383,11 @@ function printLabel(g){
         <div class="work-desc">${escapeHtml(it.detalle||'(sin descripción)')}</div>
         ${it.valor ? `<div class="work-price">💲 ${formatCLP(it.valor)} <span style="font-size:12px;font-weight:600;">(sin IVA)</span></div>` : ''}
       </div>
+      <div class="tag-payment">
+        <div>Total a pagar: <b>${formatCLP(totalConIVA(g.valor))}</b></div>
+        <div>Abono: <b>${formatCLP(g.abono)}</b></div>
+        <div>Saldo pendiente: <b>${formatCLP(saldo)}</b></div>
+      </div>
     </div>
     <div class="cut-line"></div>
   `).join('');
@@ -1385,7 +1399,7 @@ function printLabel(g){
     <head>
     <title>Etiqueta guía ${g.folio}</title>
     <style>
-      @page{ size:auto; margin:6mm; }
+      @page{ size:auto; margin:14mm; }
       *{box-sizing:border-box;}
       body{ font-family:Arial, Helvetica, sans-serif; color:#1a1a1a; margin:0; padding:0; width:100mm; }
 
@@ -1399,6 +1413,10 @@ function printLabel(g){
       .work-title{ font-size:22px; font-weight:800; color:#6B3AB0; margin-bottom:6px; }
       .work-desc{ font-size:18px; font-weight:700; color:#000; line-height:1.4; }
       .work-price{ font-size:20px; font-weight:800; color:#6B3AB0; margin-top:6px; }
+      .tag-payment{
+        margin-top:10px;padding-top:8px;border-top:1px dashed #a668e0;font-size:15px;font-weight:600;color:#1a1a1a;
+      }
+      .tag-payment div{margin-bottom:2px;}
       .tag-qr-row{ text-align:center; }
       .cut-line{ border-top:2px dashed #999; margin:14px 0; padding-top:4px; text-align:center; font-size:11px; color:#666; }
       .cut-line::before{ content:"✂ ------------ cortar aquí ------------ ✂"; }
@@ -2504,7 +2522,7 @@ function attachListeners(){
   if(printBtn) printBtn.onclick = ()=> printFullGuideBW(state.guias.find(g=>g.id===state.currentId));
 
   const labelBtn = document.getElementById('labelBtn');
-  if(labelBtn) labelBtn.onclick = ()=> printLabel(state.guias.find(g=>g.id===state.currentId));
+  if(labelBtn) labelBtn.onclick = ()=> printAmbasGuias(state.guias.find(g=>g.id===state.currentId));
 
   const deleteBtn = document.getElementById('deleteBtn');
   if(deleteBtn) deleteBtn.onclick = ()=> deleteGuia(state.currentId);
