@@ -1591,6 +1591,42 @@ async function sendToAppsScript(g){
   }
 }
 
+function importGuiasFromJSON(jsonText){
+  let arr;
+  try{
+    arr = JSON.parse(jsonText);
+  }catch(e){
+    toast('El texto no es un JSON válido');
+    return;
+  }
+  if(!Array.isArray(arr)){ toast('Debe ser una lista de guías entre [ ]'); return; }
+  let count = 0;
+  arr.forEach(item=>{
+    const g = {
+      id: uid(),
+      folio: Number(item.folio) || nextFolio(),
+      clienteNombre: item.clienteNombre || '',
+      clienteTelefono: item.clienteTelefono || '',
+      clienteEmail: item.clienteEmail || '',
+      fechaCreacion: item.fechaCreacion || todayISO(),
+      fechaEntrega: item.fechaEntrega || '',
+      items: (item.items && item.items.length) ? item.items : [{prenda:'', detalle:''}],
+      prenda: '', detalle: '',
+      valor: Number(item.valor) || 0,
+      abono: Number(item.abono) || 0,
+      estado: item.estado || 'Pendiente',
+      encargado: item.encargado || ''
+    };
+    state.guias.push(g);
+    persistGuia(g);
+    count++;
+  });
+  render();
+  toast('Se importaron '+count+' guías');
+  const ta = document.getElementById('importJsonText');
+  if(ta) ta.value = '';
+}
+
 function exportBackupJSON(){
   const payload = {
     exportadoEl: new Date().toISOString(),
@@ -1737,6 +1773,12 @@ function render(){
           <button class="btn btn-ghost" id="exportJsonBtn">💾 Respaldo completo (.json)</button>
           <button class="btn btn-ghost" id="exportCsvBtn">📊 Tabla de guías (.csv, se abre en Excel)</button>
         </div>
+      </div>
+      <div class="settings-panel" style="border-top:none;padding-top:0;flex-direction:column;align-items:flex-start;">
+        <label style="width:100%;">📥 Recuperar guías perdidas (pegar datos)</label>
+        <div style="font-size:11.5px;color:var(--ink-soft);max-width:600px;">Pega aquí el bloque de datos que te haya preparado el asistente para recrear guías que no llegaron a guardarse, y toca "Importar".</div>
+        <textarea id="importJsonText" placeholder='[{"folio":1009,"clienteNombre":"...", ...}]' style="width:100%;min-height:80px;margin-top:6px;font-family:monospace;font-size:11px;padding:8px;border:1px solid var(--line-strong);border-radius:7px;"></textarea>
+        <button class="btn btn-primary" id="importJsonBtn" style="margin-top:6px;">Importar guías</button>
       </div>
       <div class="settings-panel" style="border-top:none;padding-top:0;">
         <label style="flex:1;min-width:200px;">Agregar persona del equipo
@@ -2406,6 +2448,12 @@ function attachListeners(){
 
   const exportCsvBtn = document.getElementById('exportCsvBtn');
   if(exportCsvBtn) exportCsvBtn.onclick = exportBackupCSV;
+
+  const importJsonBtn = document.getElementById('importJsonBtn');
+  if(importJsonBtn) importJsonBtn.onclick = ()=>{
+    const ta = document.getElementById('importJsonText');
+    if(ta && ta.value.trim()) importGuiasFromJSON(ta.value.trim());
+  };
 
   const addEmpleadoBtn = document.getElementById('addEmpleadoBtn');
   if(addEmpleadoBtn) addEmpleadoBtn.onclick = ()=>{
