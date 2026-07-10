@@ -1203,24 +1203,27 @@ function printAmbasGuias(g){
   `).join('');
 
   const garmentTags = items.map((it,i)=>`
-    <div class="tag-card">
-      <div class="tag-top">
-        <div class="tag-folio">N° ${g.folio}${items.length>1?` <span class="tag-sub">Prenda ${i+1}/${items.length}</span>`:''}</div>
-        <div class="date-badge">📅 ${it.fechaEntrega?formatDateHora(it.fechaEntrega, it.horaEntrega):'Por confirmar'}</div>
+    <div class="tag-simple">
+      <div class="tag-simple-header">
+        <div>N° ${g.folio}${items.length>1?` — Prenda ${i+1}/${items.length}`:''}</div>
       </div>
-      <div class="tag-client">${escapeHtml(g.clienteNombre)} · Ingreso: ${formatDate(g.fechaCreacion)}</div>
-      <div class="work-box">
-        <div class="work-title">👕 ${escapeHtml(it.prenda||'(sin nombre)')}</div>
-        <div class="work-desc">${escapeHtml(it.detalle||'(sin descripción)')}</div>
-        ${it.valor ? `<div class="work-price">💲 ${formatCLP(it.valor)} <span style="font-size:12px;font-weight:600;">(sin IVA)</span></div>` : ''}
+      <table class="info">
+        <tr><td class="k">Cliente</td><td><b>${escapeHtml(g.clienteNombre)}</b></td></tr>
+        <tr><td class="k">Ingreso</td><td>${formatDate(g.fechaCreacion)}</td></tr>
+        <tr><td class="k">Entrega</td><td><b>${it.fechaEntrega?formatDateHora(it.fechaEntrega, it.horaEntrega):'Por confirmar'}</b></td></tr>
+      </table>
+      <div class="tag-simple-work">
+        <div><b>${escapeHtml(it.prenda||'(sin nombre)')}</b></div>
+        <div>${escapeHtml(it.detalle||'(sin descripción)')}</div>
+        ${it.valor ? `<div style="margin-top:4px;">Valor: <b>${formatCLP(totalConIVA(it.valor))}</b></div>` : ''}
       </div>
-      <div class="tag-payment">
-        <div>Total a pagar: <b>${formatCLP(totalConIVA(g.valor))}</b></div>
-        <div>Abono: <b>${formatCLP(g.abono)}</b></div>
-        <div>Saldo pendiente: <b>${formatCLP(saldo)}</b></div>
-      </div>
+      <table class="valores" style="margin-top:8px;">
+        <tr><td><b>Total a pagar</b></td><td style="text-align:right;"><b>${formatCLP(totalConIVA(g.valor))}</b></td></tr>
+        <tr><td><b>Abono</b></td><td style="text-align:right;"><b>${formatCLP(g.abono)}</b></td></tr>
+        <tr><td class="saldo-lbl"><b>Saldo pendiente</b></td><td class="saldo-val" style="text-align:right;"><b>${formatCLP(saldo)}</b></td></tr>
+      </table>
     </div>
-    ${i<items.length-1 ? '<div class="cut-line"></div>' : ''}
+    ${i<items.length-1 ? '<div class="cut-line-bw"></div>' : ''}
   `).join('');
 
   const comprobanteItems = items.map((it,i)=>`<div class="row">${i+1}. ${escapeHtml(it.prenda?it.prenda+' — ':'')}${escapeHtml(it.detalle||'')}${it.valor?' — '+formatCLP(it.valor):''}</div>`).join('');
@@ -1257,29 +1260,15 @@ function printAmbasGuias(g){
       .doc-sign{ margin-top:50px; text-align:center; font-size:12px; }
       .doc-sign .line{ border-top:1px solid #000; width:250px; margin:0 auto 6px; }
 
-      .page-etiqueta{ font-family:Arial, Helvetica, sans-serif; color:#1a1a1a; width:100mm; }
-      .page-etiqueta .tag-card{ border:2px solid #a668e0; border-radius:10px; padding:14px; margin-bottom:4px; }
-      .page-etiqueta .tag-top{ display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:8px; }
-      .page-etiqueta .tag-folio{ font-size:22px; font-weight:800; color:#6B3AB0; }
-      .page-etiqueta .tag-sub{ font-size:12px; font-weight:600; color:#666; }
-      .page-etiqueta .date-badge{
-        background:#B8720E; color:#fff; font-size:14px; font-weight:800;
-        padding:6px 12px; border-radius:20px; white-space:nowrap;
-      }
-      .page-etiqueta .tag-client{ font-size:14px; font-weight:600; color:#333; margin-bottom:10px; }
-      .page-etiqueta .work-box{
-        background:#F3EAFA; border:2px solid #a668e0; border-radius:8px; padding:12px 14px; margin-bottom:10px;
-      }
-      .page-etiqueta .work-title{ font-size:22px; font-weight:800; color:#6B3AB0; margin-bottom:6px; }
-      .page-etiqueta .work-desc{ font-size:18px; font-weight:700; color:#000; line-height:1.4; }
-      .page-etiqueta .work-price{ font-size:20px; font-weight:800; color:#6B3AB0; margin-top:6px; }
-      .page-etiqueta .tag-payment{
-        margin-top:10px;padding-top:8px;border-top:1px dashed #a668e0;font-size:15px;font-weight:600;color:#1a1a1a;
-      }
-      .page-etiqueta .tag-payment div{margin-bottom:2px;}
-      .page-etiqueta .tag-qr-row{ text-align:center; }
-      .page-etiqueta .cut-line{border-top:2px dashed #999;margin:14px 0;padding-top:4px;text-align:center;font-size:11px;color:#666;}
-      .page-etiqueta .cut-line::before{content:"✂ ------------ cortar aquí ------------ ✂";}
+      .page-etiqueta{ font-family:Arial, Helvetica, sans-serif; color:#000; width:100mm; }
+      .page-etiqueta .tag-simple{ border:1px solid #000; border-radius:6px; padding:12px 14px; margin-bottom:4px; }
+      .page-etiqueta .tag-simple-header{ font-size:14px; font-weight:800; margin-bottom:8px; }
+      .page-etiqueta .tag-simple-work{ margin:10px 0; font-size:13px; line-height:1.4; }
+      .page-etiqueta .tag-simple-work b{ font-size:15px; }
+      .page-etiqueta table.info td, .page-etiqueta table.valores td{ font-size:12px; padding:3px 0; }
+      .page-etiqueta table.info td.k{ width:70px; }
+      .page-etiqueta .cut-line-bw{border-top:1px dashed #666;margin:14px 0;padding-top:4px;text-align:center;font-size:10px;color:#666;}
+      .page-etiqueta .cut-line-bw::before{content:"✂ ------------ cortar aquí ------------ ✂";}
     </style>
     </head>
     <body onload="window.print();">
