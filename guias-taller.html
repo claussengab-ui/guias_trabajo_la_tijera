@@ -382,7 +382,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsqr/1.4.0/jsQR.js"></script>
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-  import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+  import { getFirestore, doc, getDoc, setDoc, deleteDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyCSPmbUDJBHMyPz4wsLqJqP0EnpBNzWU0E",
@@ -395,15 +395,32 @@
 
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
-  const docRef = doc(db, "guias-taller", "main");
+  const settingsRef = doc(db, "guias-taller", "main");
+  const guiasCol = collection(db, "guias-taller", "main", "items");
 
   window.fsStorage = {
+    // Configuración general (nombre del local, empleados, clave, etc.)
     async get(){
-      const snap = await getDoc(docRef);
+      const snap = await getDoc(settingsRef);
       return snap.exists() ? snap.data() : null;
     },
     async set(data){
-      await setDoc(docRef, data);
+      await setDoc(settingsRef, data, {merge:true});
+      return true;
+    },
+    // Guías: cada una es su propio documento, para que no se pisen entre computadores
+    async getGuias(){
+      const snap = await getDocs(guiasCol);
+      const arr = [];
+      snap.forEach(d => arr.push(d.data()));
+      return arr;
+    },
+    async setGuia(guia){
+      await setDoc(doc(guiasCol, guia.id), guia);
+      return true;
+    },
+    async deleteGuia(id){
+      await deleteDoc(doc(guiasCol, id));
       return true;
     }
   };
@@ -899,8 +916,21 @@ async function loadState(){
       state.appsScriptUrl = data.appsScriptUrl || state.appsScriptUrl;
       state.passwordHash = data.passwordHash || '';
       state.empleados = data.empleados || [];
-      state.guias = data.guias || [];
     }
+    state.guias = await window.fsStorage.getGuias();
+
+    // Migración automática (solo se ejecuta una vez): si hay guías en el formato antiguo
+    // (guardadas como lista dentro del documento de configuración) y todavía no se copiaron
+    // a los documentos individuales nuevos, se copian ahora, sin borrar nada del formato viejo.
+    if(state.guias.length===0 && data && Array.isArray(data.guias) && data.guias.length>0){
+      console.log('Migrando '+data.guias.length+' guías al nuevo formato...');
+      for(const g of data.guias){
+        try{ await window.fsStorage.setGuia(g); }catch(e){ console.error('Error migrando guía', g.folio, e); }
+      }
+      state.guias = data.guias;
+      toast('Guías antiguas migradas automáticamente ('+data.guias.length+')');
+    }
+
     state.storageOk = true;
   }catch(e){
     console.error('Error cargando desde Firebase', e);
@@ -914,12 +944,34 @@ async function loadState(){
 
 async function persist(){
   try{
-    const payload = {localName:state.localName, localPhone:state.localPhone, localPublicUrl:state.localPublicUrl, appsScriptUrl:state.appsScriptUrl, passwordHash:state.passwordHash, empleados:state.empleados, guias:state.guias};
+    const payload = {localName:state.localName, localPhone:state.localPhone, localPublicUrl:state.localPublicUrl, appsScriptUrl:state.appsScriptUrl, passwordHash:state.passwordHash, empleados:state.empleados};
     const ok = await window.fsStorage.set(payload);
     state.storageOk = !!ok;
   }catch(e){
     state.storageOk = false;
-    console.error('Error guardando', e);
+    console.error('Error guardando configuración', e);
+  }
+  render();
+}
+
+async function persistGuia(g){
+  try{
+    const ok = await window.fsStorage.setGuia(g);
+    state.storageOk = !!ok;
+  }catch(e){
+    state.storageOk = false;
+    console.error('Error guardando guía', e);
+  }
+  render();
+}
+
+async function removeGuiaRemote(id){
+  try{
+    await window.fsStorage.deleteGuia(id);
+    state.storageOk = true;
+  }catch(e){
+    state.storageOk = false;
+    console.error('Error eliminando guía', e);
   }
   render();
 }
@@ -1067,9 +1119,10 @@ function saveForm(e){
   if(!data.clienteNombre){ toast('Falta el nombre del cliente'); return; }
 
   let nuevaGuiaCreada = null;
+  let guiaGuardada = null;
   if(state.editingId){
     const idx = state.guias.findIndex(g=>g.id===state.editingId);
-    if(idx>-1){ state.guias[idx] = {...state.guias[idx], ...data}; }
+    if(idx>-1){ state.guias[idx] = {...state.guias[idx], ...data}; guiaGuardada = state.guias[idx]; }
     state.view='detail';
     state.currentId=state.editingId;
     state.editingId=null;
@@ -1079,8 +1132,9 @@ function saveForm(e){
     state.view='detail';
     state.currentId=g.id;
     nuevaGuiaCreada = g;
+    guiaGuardada = g;
   }
-  persist();
+  if(guiaGuardada) persistGuia(guiaGuardada);
   toast('Guía guardada');
 
   if(nuevaGuiaCreada){
@@ -1095,7 +1149,7 @@ function deleteGuia(id){
   state.view='empty';
   state.currentId=null;
   state.mobileDetail=false;
-  persist();
+  removeGuiaRemote(id);
 }
 
 function setEstado(id, estado){
@@ -1104,7 +1158,7 @@ function setEstado(id, estado){
     g.estado=estado;
     if(estado==='Entregado' && !g.fechaEntregadoReal) g.fechaEntregadoReal = todayISO();
     if(estado!=='Entregado') g.fechaEntregadoReal = '';
-    persist();
+    persistGuia(g);
   }
 }
 
