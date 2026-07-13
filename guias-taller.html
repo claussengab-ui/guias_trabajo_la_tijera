@@ -146,6 +146,17 @@
   }
   .field textarea{resize:vertical;min-height:70px;}
   .money-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;}
+  .abono-group{
+    display:grid;grid-template-columns:1fr 1fr;gap:12px;
+    background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:14px;
+  }
+  .metodo-pago-row{display:flex;gap:10px;margin-top:2px;}
+  .metodo-pago-opt{
+    display:flex;align-items:center;gap:6px;padding:9px 12px;border:1px solid var(--line-strong);border-radius:7px;
+    font-size:13px;font-weight:600;cursor:pointer;background:var(--surface);flex:1;
+  }
+  .metodo-pago-opt input{margin:0;}
+  .metodo-pago-opt:has(input:checked){border-color:var(--blue);background:var(--bg);color:var(--blue-dark);}
   .saldo-box{background:var(--bg);border:1px solid var(--line-strong);border-radius:7px;padding:9px 10px;font-family:'Inter',sans-serif;font-variant-numeric:tabular-nums;font-size:14px;font-weight:700;}
 
   .detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 20px;font-size:13.5px;}
@@ -366,7 +377,7 @@
     .app.show-detail .sidebar{display:none;}
     .app.show-detail .main{display:block;}
     .back-btn{display:inline-block;}
-    .field-row,.money-row{grid-template-columns:1fr;}
+    .field-row,.money-row,.abono-group{grid-template-columns:1fr;}
   }
   @media print{
     .topbar,.sidebar,.settings-panel,.back-btn,.btn-row,.estado-actions,.warn-banner{display:none !important;}
@@ -458,7 +469,8 @@ let state = {
   simpleSearch:'',
   calendarMonth: new Date().getFullYear()+'-'+String(new Date().getMonth()+1).padStart(2,'0'),
   reportMonth: new Date().getFullYear()+'-'+String(new Date().getMonth()+1).padStart(2,'0'),
-  showPagoCostureras: false
+  showPagoCostureras: false,
+  showDetallePorPrenda: false
 };
 
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
@@ -662,7 +674,7 @@ function renderScanner(){
 
 
 function initFormItems(g){
-  return getItems(g||{}).map(i=>({prenda:i.prenda||'', detalle:i.detalle||'', fechaEntrega:i.fechaEntrega||'', horaEntrega:i.horaEntrega||'', fechaCustom:!!i.fechaCustom, valor:i.valor||0}));
+  return getItems(g||{}).map(i=>({prenda:i.prenda||'', detalle:i.detalle||'', fechaEntrega:i.fechaEntrega||'', horaEntrega:i.horaEntrega||'', fechaCustom:!!i.fechaCustom, valor:i.valor||0, encargado:i.encargado||'', encargadoCustom:!!i.encargadoCustom}));
 }
 
 function sumaItemsValor(){
@@ -1069,7 +1081,7 @@ function openNewForm(){
   state.editingId=null;
   state.currentId=null;
   state.mobileDetail=true;
-  formItems = [{prenda:'', detalle:'', fechaEntrega:'', horaEntrega:'', fechaCustom:false, valor:0}];
+  formItems = [{prenda:'', detalle:'', fechaEntrega:'', horaEntrega:'', fechaCustom:false, valor:0, encargado: state.empleados.length===1?state.empleados[0].nombre:'', encargadoCustom:false}];
   formTotalCustom = false;
   render();
 }
@@ -1104,8 +1116,9 @@ function saveForm(e){
   e.preventDefault();
   const f = e.target;
   const items = formItems
-    .map(it=>({prenda:(it.prenda||'').trim(), detalle:(it.detalle||'').trim(), fechaEntrega: it.fechaEntrega||'', horaEntrega: it.horaEntrega||'', fechaCustom: !!it.fechaCustom, valor: Number(it.valor)||0}))
+    .map(it=>({prenda:(it.prenda||'').trim(), detalle:(it.detalle||'').trim(), fechaEntrega: it.fechaEntrega||'', horaEntrega: it.horaEntrega||'', fechaCustom: !!it.fechaCustom, valor: Number(it.valor)||0, encargado: it.encargado||'', encargadoCustom: !!it.encargadoCustom}))
     .filter(it=>it.prenda || it.detalle);
+  const metodoPagoInput = f.querySelector('input[name="metodoPago"]:checked');
   const data = {
     clienteNombre: f.clienteNombre.value.trim(),
     clienteTelefono: f.clienteTelefono.value.trim(),
@@ -1116,6 +1129,7 @@ function saveForm(e){
     prenda: '', detalle: '', // campos antiguos, ya no se usan (compatibilidad)
     valor: Number(f.valor.value)||0,
     abono: Number(f.abono.value)||0,
+    metodoPago: metodoPagoInput ? metodoPagoInput.value : '',
     estado: f.estado.value,
     encargado: f.encargado ? f.encargado.value : ''
   };
@@ -1171,6 +1185,40 @@ function setEncargado(id, encargado){
     g.encargado = encargado;
     persistGuia(g);
   }
+}
+
+function setEncargado2(id, encargado2){
+  const g = state.guias.find(x=>x.id===id);
+  if(g){
+    g.encargado2 = encargado2;
+    persistGuia(g);
+  }
+}
+
+function setAbono(id, monto){
+  const g = state.guias.find(x=>x.id===id);
+  if(g){
+    g.abono = Number(monto)||0;
+    persistGuia(g);
+  }
+}
+
+function setMetodoPago(id, metodo){
+  const g = state.guias.find(x=>x.id===id);
+  if(g){
+    g.metodoPago = metodo;
+    persistGuia(g);
+  }
+}
+
+function setItemEncargado(guiaId, idx, encargado){
+  const g = state.guias.find(x=>x.id===guiaId);
+  if(!g) return;
+  if(!g.items || !g.items.length) g.items = getItems(g).map(it=>({...it}));
+  if(!g.items[idx]) return;
+  g.items[idx].encargado = encargado;
+  g.items[idx].encargadoCustom = true;
+  persistGuia(g);
 }
 
 function sendWhatsApp(g, msgOverride){
@@ -1614,7 +1662,7 @@ function csvEscape(val){
 }
 
 function exportBackupCSV(soloMes){
-  const headers = ['Folio','Cliente','Telefono','Email','Encargado','FechaIngreso','FechaEntrega','Estado','Prendas','ValorNeto','IVA19','ValorConIVA','Abono','Saldo'];
+  const headers = ['Folio','Cliente','Telefono','Email','Encargado','FechaIngreso','FechaEntrega','Estado','Prendas','ValorNeto','IVA19','ValorConIVA','Abono','MetodoPago','Saldo'];
   const guiasFiltradas = soloMes ? state.guias.filter(g=>(g.fechaCreacion||'').slice(0,7)===soloMes) : state.guias;
   const rows = guiasFiltradas.map(g=>{
     const saldo = totalConIVA(g.valor) - (Number(g.abono)||0);
@@ -1622,7 +1670,7 @@ function exportBackupCSV(soloMes){
     return [
       g.folio, g.clienteNombre, g.clienteTelefono||'', g.clienteEmail||'', g.encargado||'',
       formatDate(g.fechaCreacion), g.fechaEntrega?formatDate(g.fechaEntrega):'', g.estado,
-      prendas, g.valor||0, montoIVA(g.valor), totalConIVA(g.valor), g.abono||0, saldo
+      prendas, g.valor||0, montoIVA(g.valor), totalConIVA(g.valor), g.abono||0, g.metodoPago||'', saldo
     ].map(csvEscape).join(',');
   });
   const csv = '\uFEFF'+[headers.join(','), ...rows].join('\n');
@@ -1899,14 +1947,25 @@ function renderMain(filteredList){
               <div class="mono valor-con-iva-cell" id="valorTotalIvaHint" style="text-align:left;">${g?.valor ? `${formatCLP(totalConIVA(g.valor))}` : '$0'}</div>
             </div>
             <div class="field">
-              <label>Abono (CLP, con IVA)</label>
-              <input type="number" name="abono" min="0" step="1" value="${g?.abono??''}">
-            </div>
-            <div class="field">
               <label>Estado</label>
               <select name="estado">
                 ${ESTADOS.map(e=>`<option value="${e.id}" ${g?.estado===e.id?'selected':''}>${e.id}</option>`).join('')}
               </select>
+            </div>
+          </div>
+
+          <div class="section-label">Abono recibido</div>
+          <div class="abono-group">
+            <div class="field">
+              <label>Monto abonado (CLP)</label>
+              <input type="number" name="abono" min="0" step="1" value="${g?.abono??''}">
+            </div>
+            <div class="field">
+              <label>Método de pago</label>
+              <div class="metodo-pago-row">
+                <label class="metodo-pago-opt"><input type="radio" name="metodoPago" value="efectivo" ${g?.metodoPago==='efectivo'?'checked':''}> 💵 Efectivo</label>
+                <label class="metodo-pago-opt"><input type="radio" name="metodoPago" value="tarjeta" ${g?.metodoPago==='tarjeta'?'checked':''}> 💳 Tarjeta</label>
+              </div>
             </div>
           </div>
 
@@ -1969,7 +2028,8 @@ function renderMain(filteredList){
             <div><div class="k">Total con IVA</div><div class="v mono">${formatCLP(totalConIVA(g.valor))}</div></div>
           </div>
           <div class="money-row">
-            <div><div class="k">Abono</div><div class="v mono">${formatCLP(g.abono)}</div></div>
+            <div><div class="k">Abono</div><div class="v mono">${formatCLP(g.abono)} ${g.metodoPago==='efectivo'?'💵':(g.metodoPago==='tarjeta'?'💳':'')}</div></div>
+            <div><div class="k">Método</div><div class="v mono">${g.metodoPago==='efectivo'?'Efectivo':(g.metodoPago==='tarjeta'?'Tarjeta':'—')}</div></div>
             <div><div class="k">Saldo</div><div class="saldo-box">${formatCLP(saldo)}</div></div>
           </div>
 
@@ -2119,6 +2179,16 @@ function renderPanelGeneral(list){
             ${state.empleados.map(emp=>`<option value="${escapeHtml(emp.nombre)}" ${g.encargado===emp.nombre?'selected':''}>${escapeHtml(emp.nombre)}</option>`).join('')}
           </select>
         </td>
+        <td>
+          <input type="number" min="0" step="1" class="panel-abono-input" data-id="${g.id}" value="${g.abono||''}" placeholder="$0" style="width:80px;">
+        </td>
+        <td>
+          <select class="panel-metodo-select" data-id="${g.id}">
+            <option value="" ${!g.metodoPago?'selected':''}>—</option>
+            <option value="efectivo" ${g.metodoPago==='efectivo'?'selected':''}>💵 Efectivo</option>
+            <option value="tarjeta" ${g.metodoPago==='tarjeta'?'selected':''}>💳 Tarjeta</option>
+          </select>
+        </td>
         <td>${g.fechaEntrega?formatDate(g.fechaEntrega):'—'}${urg==='atrasado'?' ⚠️':(urg==='hoy'?' ⏰':'')}</td>
         <td style="text-align:right;">${formatCLP(saldo)}</td>
       </tr>
@@ -2150,7 +2220,7 @@ function renderPanelGeneral(list){
       <table class="panel-table">
         <thead>
           <tr>
-            <th>Folio</th><th>Cliente</th><th>Prenda(s)</th><th>Estado</th><th>Encargado/a</th><th>Entrega</th><th style="text-align:right;">Saldo</th>
+            <th>Folio</th><th>Cliente</th><th>Prenda(s)</th><th>Estado</th><th>Encargado/a</th><th>Abono</th><th>Método</th><th>Entrega</th><th style="text-align:right;">Saldo</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
@@ -2171,6 +2241,8 @@ function renderMonthReport(){
   const valorConIvaTotal = guiasDelMes.reduce((s,g)=>s+totalConIVA(g.valor),0);
   const ivaTotal = valorConIvaTotal - valorNetoTotal;
   const abonoTotal = guiasDelMes.reduce((s,g)=>s+(Number(g.abono)||0),0);
+  const abonoEfectivoTotal = guiasDelMes.filter(g=>g.metodoPago==='efectivo').reduce((s,g)=>s+(Number(g.abono)||0),0);
+  const abonoTarjetaTotal = guiasDelMes.filter(g=>g.metodoPago==='tarjeta').reduce((s,g)=>s+(Number(g.abono)||0),0);
   const saldoTotal = valorConIvaTotal - abonoTotal;
   const totalPrendas = guiasDelMes.reduce((s,g)=>s+getItems(g).length,0);
 
@@ -2192,7 +2264,16 @@ function renderMonthReport(){
           </select>
         </td>
         <td style="text-align:right;">${formatCLP(g.valor)}</td>
-        <td style="text-align:right;">${formatCLP(g.abono)}</td>
+        <td>
+          <input type="number" min="0" step="1" class="panel-abono-input" data-id="${g.id}" value="${g.abono||''}" placeholder="$0" style="width:80px;">
+        </td>
+        <td>
+          <select class="panel-metodo-select" data-id="${g.id}">
+            <option value="" ${!g.metodoPago?'selected':''}>—</option>
+            <option value="efectivo" ${g.metodoPago==='efectivo'?'selected':''}>💵 Efectivo</option>
+            <option value="tarjeta" ${g.metodoPago==='tarjeta'?'selected':''}>💳 Tarjeta</option>
+          </select>
+        </td>
         <td style="text-align:right;">${formatCLP(saldo)}</td>
       </tr>
     `;
@@ -2232,7 +2313,15 @@ function renderMonthReport(){
       </div>
       <div class="summary-card">
         <div class="num">${formatCLP(abonoTotal)}</div>
-        <div class="lbl">Abonado</div>
+        <div class="lbl">Abonado (total)</div>
+      </div>
+      <div class="summary-card" style="border-color:var(--green);">
+        <div class="num" style="color:var(--green);">${formatCLP(abonoEfectivoTotal)}</div>
+        <div class="lbl">💵 Abonado en efectivo</div>
+      </div>
+      <div class="summary-card">
+        <div class="num">${formatCLP(abonoTarjetaTotal)}</div>
+        <div class="lbl">💳 Abonado con tarjeta (ver Transbank)</div>
       </div>
       <div class="summary-card" style="border-color:var(--mustard);">
         <div class="num" style="color:var(--mustard);">${formatCLP(saldoTotal)}</div>
@@ -2245,19 +2334,61 @@ function renderMonthReport(){
     <div style="margin:14px 0;display:flex;gap:8px;flex-wrap:wrap;">
       <button class="btn btn-ghost" id="exportMonthCsvBtn">📊 Exportar este mes (.csv)</button>
       <button class="btn btn-reminder" id="pagoCosturerasBtn">👥 Pago por costurera este mes</button>
+      <button class="btn btn-reminder" id="detallePorPrendaBtn">🧵 Asignar encargada por prenda</button>
     </div>
 
     ${state.showPagoCostureras ? renderPagoCostureras() : ''}
+    ${state.showDetallePorPrenda ? renderDetallePorPrenda() : ''}
 
     <div style="overflow-x:auto;max-width:900px;">
       <table class="panel-table">
         <thead>
           <tr>
             <th>Folio</th><th>Ingreso</th><th>Cliente</th><th>Estado</th><th>Encargado/a</th>
-            <th style="text-align:right;">Valor (neto)</th><th style="text-align:right;">Abono</th><th style="text-align:right;">Saldo</th>
+            <th style="text-align:right;">Valor (neto)</th><th>Abono</th><th>Método</th><th style="text-align:right;">Saldo</th>
           </tr>
         </thead>
-        <tbody>${filas || `<tr><td colspan="7" style="text-align:center;color:var(--ink-soft);padding:20px;">No hay guías ingresadas este mes.</td></tr>`}</tbody>
+        <tbody>${filas || `<tr><td colspan="8" style="text-align:center;color:var(--ink-soft);padding:20px;">No hay guías ingresadas este mes.</td></tr>`}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderDetallePorPrenda(){
+  const guiasDelMes = sortGuias(state.guias.filter(g=>(g.fechaCreacion||'').slice(0,7)===state.reportMonth));
+
+  if(state.empleados.length===0){
+    return `<div class="empty-list" style="margin:14px 0;max-width:700px;">Todavía no has agregado a nadie del equipo. Ve a ⚙️ Configuración → "Agregar persona del equipo".</div>`;
+  }
+
+  const filas = [];
+  guiasDelMes.forEach(g=>{
+    getItems(g).forEach((it,idx)=>{
+      filas.push(`
+        <tr class="panel-row" data-id="${g.id}">
+          <td class="mono">${g.folio}</td>
+          <td>${escapeHtml(g.clienteNombre)}</td>
+          <td>${escapeHtml(it.prenda||'(sin nombre)')}</td>
+          <td style="text-align:right;">${formatCLP(it.valor)}</td>
+          <td>
+            <select class="item-encargado-select" data-guia-id="${g.id}" data-idx="${idx}">
+              <option value="" ${!it.encargado?'selected':''}>Sin asignar</option>
+              ${state.empleados.map(emp=>`<option value="${escapeHtml(emp.nombre)}" ${it.encargado===emp.nombre?'selected':''}>${escapeHtml(emp.nombre)}</option>`).join('')}
+            </select>
+          </td>
+        </tr>
+      `);
+    });
+  });
+
+  return `
+    <div style="margin:14px 0;max-width:700px;">
+      <div class="mono" style="font-size:11px;color:var(--ink-soft);margin-bottom:8px;">Cada fila es una prenda. Asigna quién hizo cada una — el pago se calcula sobre el valor de esa prenda específica.</div>
+      <table class="panel-table">
+        <thead>
+          <tr><th>Folio</th><th>Cliente</th><th>Prenda</th><th style="text-align:right;">Valor</th><th>Encargada</th></tr>
+        </thead>
+        <tbody>${filas.join('') || `<tr><td colspan="5" style="text-align:center;color:var(--ink-soft);padding:20px;">No hay prendas este mes.</td></tr>`}</tbody>
       </table>
     </div>
   `;
@@ -2270,16 +2401,54 @@ function renderPagoCostureras(){
     return `<div class="empty-list" style="margin:14px 0;max-width:600px;">Todavía no has agregado a nadie del equipo. Ve a ⚙️ Configuración → "Agregar persona del equipo" y ponle su nombre y porcentaje.</div>`;
   }
 
+  const porEmpleado = {};
+  state.empleados.forEach(emp=>{ porEmpleado[emp.nombre] = { totalNeto: 0, porGuia: {} }; });
+
+  guiasDelMes.forEach(g=>{
+    const items = getItems(g);
+    const itemsCustomizados = items.filter(it=>it.encargado && it.encargado!==(g.encargado||''));
+
+    if(itemsCustomizados.length>0){
+      // Reparto detallado por prenda (cuando se personalizó desde el formulario de la guía)
+      items.forEach(it=>{
+        const encargadoItem = it.encargado || g.encargado || '';
+        if(encargadoItem && porEmpleado[encargadoItem]){
+          const bucket = porEmpleado[encargadoItem];
+          bucket.totalNeto += Number(it.valor)||0;
+          if(!bucket.porGuia[g.id]) bucket.porGuia[g.id] = { guia:g, neto:0 };
+          bucket.porGuia[g.id].neto += Number(it.valor)||0;
+        }
+      });
+    } else if(g.encargado2 && g.encargado2!==g.encargado){
+      // Reparto 50/50 entre las dos encargadas de la guía completa
+      const mitad = (Number(g.valor)||0) / 2;
+      [g.encargado, g.encargado2].forEach(nombre=>{
+        if(nombre && porEmpleado[nombre]){
+          const bucket = porEmpleado[nombre];
+          bucket.totalNeto += mitad;
+          if(!bucket.porGuia[g.id]) bucket.porGuia[g.id] = { guia:g, neto:0 };
+          bucket.porGuia[g.id].neto += mitad;
+        }
+      });
+    } else if(g.encargado && porEmpleado[g.encargado]){
+      const bucket = porEmpleado[g.encargado];
+      bucket.totalNeto += Number(g.valor)||0;
+      if(!bucket.porGuia[g.id]) bucket.porGuia[g.id] = { guia:g, neto:0 };
+      bucket.porGuia[g.id].neto += Number(g.valor)||0;
+    }
+  });
+
   const bloques = state.empleados.map(emp=>{
-    const susGuias = guiasDelMes.filter(g=>g.encargado===emp.nombre);
-    const totalConIva = susGuias.reduce((s,g)=>s+totalConIVA(g.valor),0);
-    const totalNeto = susGuias.reduce((s,g)=>s+(Number(g.valor)||0),0);
+    const data = porEmpleado[emp.nombre];
+    const totalNeto = data.totalNeto;
+    const totalConIva = totalConIVA(totalNeto);
     const aPagar = Math.round(totalNeto * (emp.porcentaje/100));
-    const filasEmp = susGuias.map(g=>`
-      <tr class="panel-row" data-id="${g.id}">
-        <td class="mono">${g.folio}</td>
-        <td>${escapeHtml(g.clienteNombre)}</td>
-        <td style="text-align:right;">${formatCLP(totalConIVA(g.valor))}</td>
+    const listaGuias = Object.values(data.porGuia);
+    const filasEmp = listaGuias.map(({guia,neto})=>`
+      <tr class="panel-row" data-id="${guia.id}">
+        <td class="mono">${guia.folio}</td>
+        <td>${escapeHtml(guia.clienteNombre)}</td>
+        <td style="text-align:right;">${formatCLP(totalConIVA(neto))}</td>
       </tr>
     `).join('');
     return `
@@ -2292,10 +2461,10 @@ function renderPagoCostureras(){
           <span class="estado-badge" style="background:var(--blue);">${emp.porcentaje}% del trabajo</span>
         </div>
         <div class="ticket-body">
-          <div class="mono" style="font-size:11px;color:var(--ink-soft);margin-bottom:8px;">${susGuias.length} guía${susGuias.length!==1?'s':''} este mes</div>
+          <div class="mono" style="font-size:11px;color:var(--ink-soft);margin-bottom:8px;">${listaGuias.length} guía${listaGuias.length!==1?'s':''} este mes (por prenda asignada)</div>
           <table class="panel-table" style="margin-bottom:12px;">
-            <thead><tr><th>Folio</th><th>Cliente</th><th style="text-align:right;">Total (con IVA)</th></tr></thead>
-            <tbody>${filasEmp || `<tr><td colspan="3" style="text-align:center;color:var(--ink-soft);padding:10px;">Sin guías asignadas este mes.</td></tr>`}</tbody>
+            <thead><tr><th>Folio</th><th>Cliente</th><th style="text-align:right;">Monto atribuido (con IVA)</th></tr></thead>
+            <tbody>${filasEmp || `<tr><td colspan="3" style="text-align:center;color:var(--ink-soft);padding:10px;">Sin prendas asignadas este mes.</td></tr>`}</tbody>
           </table>
           <div class="money-row">
             <div><div class="k">Total con IVA</div><div class="v mono">${formatCLP(totalConIva)}</div></div>
@@ -2421,7 +2590,7 @@ function attachListeners(){
   const addItemBtn = document.getElementById('addItemBtn');
   if(addItemBtn) addItemBtn.onclick = ()=>{
     const fechaGuia = document.querySelector('input[name="fechaEntrega"]')?.value || '';
-    formItems.push({prenda:'', detalle:'', fechaEntrega:fechaGuia, horaEntrega:'', fechaCustom:false, valor:0});
+    formItems.push({prenda:'', detalle:'', fechaEntrega:fechaGuia, horaEntrega:'', fechaCustom:false, valor:0, encargado: document.querySelector('select[name="encargado"]')?document.querySelector('select[name="encargado"]').value:'', encargadoCustom:false});
     refreshItemsContainer();
   };
 
@@ -2439,6 +2608,20 @@ function attachListeners(){
     valorGuiaInput.oninput = ()=>{
       formTotalCustom = true;
       updateValorTotalHint();
+    };
+  }
+
+  const encargadoGuiaSelect = document.querySelector('select[name="encargado"]');
+  if(encargadoGuiaSelect){
+    encargadoGuiaSelect.onchange = ()=>{
+      const nuevoValor = encargadoGuiaSelect.value;
+      formItems.forEach((it,idx)=>{
+        if(!it.encargadoCustom){
+          it.encargado = nuevoValor;
+          const sel = document.querySelector(`.item-encargado[data-idx="${idx}"]`);
+          if(sel) sel.value = nuevoValor;
+        }
+      });
     };
   }
 
@@ -2630,7 +2813,7 @@ function attachListeners(){
 
   document.querySelectorAll('.panel-row').forEach(row=>{
     row.onclick = (e)=>{
-      if(e.target.closest('.panel-estado-select') || e.target.closest('.panel-encargado-select')) return;
+      if(e.target.closest('.panel-estado-select') || e.target.closest('.panel-encargado-select') || e.target.closest('.panel-encargado2-select') || e.target.closest('.panel-abono-input') || e.target.closest('.panel-metodo-select') || e.target.closest('.item-encargado-select')) return;
       openDetail(row.dataset.id);
     };
   });
@@ -2652,6 +2835,45 @@ function attachListeners(){
       toast('Encargado/a actualizado');
     };
   });
+
+  document.querySelectorAll('.panel-encargado2-select').forEach(sel=>{
+    sel.onclick = (e)=> e.stopPropagation();
+    sel.onchange = (e)=>{
+      e.stopPropagation();
+      setEncargado2(sel.dataset.id, sel.value);
+      toast('2ª encargada actualizada');
+    };
+  });
+
+  document.querySelectorAll('.panel-abono-input').forEach(inp=>{
+    inp.onclick = (e)=> e.stopPropagation();
+    inp.onchange = (e)=>{
+      e.stopPropagation();
+      setAbono(inp.dataset.id, inp.value);
+      toast('Abono actualizado');
+    };
+  });
+
+  document.querySelectorAll('.panel-metodo-select').forEach(sel=>{
+    sel.onclick = (e)=> e.stopPropagation();
+    sel.onchange = (e)=>{
+      e.stopPropagation();
+      setMetodoPago(sel.dataset.id, sel.value);
+      toast('Método de pago actualizado');
+    };
+  });
+
+  document.querySelectorAll('.item-encargado-select').forEach(sel=>{
+    sel.onclick = (e)=> e.stopPropagation();
+    sel.onchange = (e)=>{
+      e.stopPropagation();
+      setItemEncargado(sel.dataset.guiaId, Number(sel.dataset.idx), sel.value);
+      toast('Encargada de la prenda actualizada');
+    };
+  });
+
+  const detallePorPrendaBtn = document.getElementById('detallePorPrendaBtn');
+  if(detallePorPrendaBtn) detallePorPrendaBtn.onclick = ()=>{ state.showDetallePorPrenda = !state.showDetallePorPrenda; render(); };
 
   const backBtn = document.getElementById('backBtn');
   if(backBtn) backBtn.onclick = backToList;
