@@ -467,6 +467,7 @@ let state = {
   filterEstado:'todas',
   filterEmpleado:'todos',
   showSettings:false,
+  migradoValorConIVA:false,
   mobileDetail:false,
   simpleMode:false,
   simpleSearch:'',
@@ -934,6 +935,7 @@ async function loadState(){
       state.appsScriptUrl = data.appsScriptUrl || state.appsScriptUrl;
       state.passwordHash = data.passwordHash || '';
       state.empleados = (data.empleados || []).map(e => typeof e === 'string' ? {nombre:e, porcentaje:0} : {nombre:e.nombre||'', porcentaje:Number(e.porcentaje)||0});
+      state.migradoValorConIVA = !!data.migradoValorConIVA;
     }
     state.guias = await window.fsStorage.getGuias();
 
@@ -962,7 +964,7 @@ async function loadState(){
 
 async function persist(){
   try{
-    const payload = {localName:state.localName, localPhone:state.localPhone, localPublicUrl:state.localPublicUrl, appsScriptUrl:state.appsScriptUrl, passwordHash:state.passwordHash, empleados:state.empleados};
+    const payload = {localName:state.localName, localPhone:state.localPhone, localPublicUrl:state.localPublicUrl, appsScriptUrl:state.appsScriptUrl, passwordHash:state.passwordHash, empleados:state.empleados, migradoValorConIVA:state.migradoValorConIVA};
     const ok = await window.fsStorage.set(payload);
     state.storageOk = !!ok;
   }catch(e){
@@ -1607,6 +1609,29 @@ async function sendToAppsScript(g){
   }
 }
 
+async function migrarValoresAntiguosAConIVA(){
+  const confirmado = confirm(
+    'Esto va a corregir TODAS las guías existentes, multiplicando su "Valor" guardado por 1,19 ' +
+    '(para que pasen a representar el precio final con IVA, en vez del valor neto antiguo).\n\n' +
+    'Solo debes hacer esto UNA VEZ. ¿Continuar?'
+  );
+  if(!confirmado) return;
+
+  let count = 0;
+  for(const g of state.guias){
+    g.valor = totalConIVA(g.valor);
+    if(g.items && g.items.length){
+      g.items.forEach(it=>{ if(it.valor) it.valor = totalConIVA(it.valor); });
+    }
+    await window.fsStorage.setGuia(g);
+    count++;
+  }
+  state.migradoValorConIVA = true;
+  await persist();
+  toast('Se corrigieron '+count+' guías');
+  render();
+}
+
 function importGuiasFromJSON(jsonText){
   let arr;
   try{
@@ -1795,6 +1820,12 @@ function render(){
           <button class="btn btn-ghost" id="exportCsvBtn">📊 Tabla de guías (.csv, se abre en Excel)</button>
         </div>
       </div>
+      ${!state.migradoValorConIVA ? `
+      <div class="settings-panel" style="border-top:none;padding-top:0;flex-direction:column;align-items:flex-start;">
+        <label style="width:100%;">⚠️ Corregir valores antiguos (una sola vez)</label>
+        <div style="font-size:11.5px;color:var(--ink-soft);max-width:600px;">Tus guías más antiguas guardaron el valor SIN IVA. Ahora la app ingresa el valor CON IVA, así que hay que corregirlas una sola vez para que el saldo se calcule bien.</div>
+        <button class="btn btn-danger" id="migrarValorBtn" style="margin-top:6px;">Corregir todas las guías ahora</button>
+      </div>` : ''}
       <div class="settings-panel" style="border-top:none;padding-top:0;flex-direction:column;align-items:flex-start;">
         <label style="width:100%;">📥 Recuperar guías perdidas (pegar datos)</label>
         <div style="font-size:11.5px;color:var(--ink-soft);max-width:600px;">Pega aquí el bloque de datos que te haya preparado el asistente para recrear guías que no llegaron a guardarse, y toca "Importar".</div>
@@ -2669,6 +2700,9 @@ function attachListeners(){
 
   const exportCsvBtn = document.getElementById('exportCsvBtn');
   if(exportCsvBtn) exportCsvBtn.onclick = exportBackupCSV;
+
+  const migrarValorBtn = document.getElementById('migrarValorBtn');
+  if(migrarValorBtn) migrarValorBtn.onclick = migrarValoresAntiguosAConIVA;
 
   const importJsonBtn = document.getElementById('importJsonBtn');
   if(importJsonBtn) importJsonBtn.onclick = ()=>{
