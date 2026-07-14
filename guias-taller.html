@@ -468,6 +468,7 @@ let state = {
   filterEmpleado:'todos',
   showSettings:false,
   migradoValorConIVA:false,
+  listaPrecios:[],
   mobileDetail:false,
   simpleMode:false,
   simpleSearch:'',
@@ -936,6 +937,7 @@ async function loadState(){
       state.passwordHash = data.passwordHash || '';
       state.empleados = (data.empleados || []).map(e => typeof e === 'string' ? {nombre:e, porcentaje:0} : {nombre:e.nombre||'', porcentaje:Number(e.porcentaje)||0});
       state.migradoValorConIVA = !!data.migradoValorConIVA;
+      state.listaPrecios = data.listaPrecios || [];
     }
     state.guias = await window.fsStorage.getGuias();
 
@@ -964,7 +966,7 @@ async function loadState(){
 
 async function persist(){
   try{
-    const payload = {localName:state.localName, localPhone:state.localPhone, localPublicUrl:state.localPublicUrl, appsScriptUrl:state.appsScriptUrl, passwordHash:state.passwordHash, empleados:state.empleados, migradoValorConIVA:state.migradoValorConIVA};
+    const payload = {localName:state.localName, localPhone:state.localPhone, localPublicUrl:state.localPublicUrl, appsScriptUrl:state.appsScriptUrl, passwordHash:state.passwordHash, empleados:state.empleados, migradoValorConIVA:state.migradoValorConIVA, listaPrecios:state.listaPrecios};
     const ok = await window.fsStorage.set(payload);
     state.storageOk = !!ok;
   }catch(e){
@@ -1799,6 +1801,7 @@ function render(){
         <button class="gear" id="scanBtn" title="Escanear código QR de una prenda">📷</button>
         <button class="gear" id="monthReportBtn" title="Reporte mensual">📈</button>
         <button class="gear" id="calendarBtn" title="Calendario de entregas">📅</button>
+        <button class="gear" id="preciosBtn" title="Lista de precios">💲</button>
         <button class="gear" id="simpleModeBtn" title="Modo simple (botones grandes)">📱</button>
         <button class="gear" id="summaryBtn" title="Resumen del día">📊</button>
         <button class="gear" id="gearBtn" title="Configurar local">⚙︎</button>
@@ -1921,6 +1924,9 @@ function renderMain(filteredList){
   }
   if(state.view==='calendar'){
     return renderCalendar();
+  }
+  if(state.view==='precios'){
+    return renderListaPrecios();
   }
   if(state.view==='monthreport'){
     return renderMonthReport();
@@ -2535,6 +2541,74 @@ function renderPagoCostureras(){
   return `<div style="margin:14px 0;">${bloques}</div>`;
 }
 
+function renderListaPrecios(){
+  const lista = [...state.listaPrecios].sort((a,b)=>a.descripcion.localeCompare(b.descripcion, 'es', {sensitivity:'base'}));
+
+  const filas = lista.map(p=>`
+    <tr>
+      <td>
+        <input type="text" class="precio-desc-input" data-id="${p.id}" value="${escapeHtml(p.descripcion)}" placeholder="Descripción del arreglo">
+      </td>
+      <td style="width:140px;">
+        <input type="number" min="0" step="1" class="precio-monto-input" data-id="${p.id}" value="${p.precio||''}" placeholder="$0">
+      </td>
+      <td style="width:130px;">
+        <input type="text" class="precio-tiempo-input" data-id="${p.id}" value="${escapeHtml(p.tiempoEntrega||'')}" placeholder="Ej: 1 día">
+      </td>
+      <td style="width:40px;text-align:center;">
+        <button class="item-remove" data-remove-precio="${p.id}" title="Eliminar">✕</button>
+      </td>
+    </tr>
+  `).join('');
+
+  return `
+    <button class="back-btn" id="backBtn">← Volver a la lista</button>
+    <h2 style="margin:0 0 4px;font-size:18px;">💲 Lista de precios</h2>
+    <div class="mono" style="font-size:11px;color:var(--ink-soft);margin-bottom:16px;">Referencia interna de precios habituales, ordenada alfabéticamente. No afecta las guías de trabajo.</div>
+
+    <div class="btn-row" style="margin-bottom:16px;">
+      <input type="text" id="nuevoPrecioDesc" placeholder="Descripción del arreglo (ej: Basta a máquina)" style="flex:2;min-width:220px;padding:9px 12px;border:1px solid var(--line-strong);border-radius:7px;font-family:inherit;font-size:13px;">
+      <input type="number" min="0" step="1" id="nuevoPrecioMonto" placeholder="$0" style="width:120px;padding:9px 12px;border:1px solid var(--line-strong);border-radius:7px;font-family:inherit;font-size:13px;">
+      <input type="text" id="nuevoPrecioTiempo" placeholder="Tiempo de entrega (ej: 1 día)" style="width:160px;padding:9px 12px;border:1px solid var(--line-strong);border-radius:7px;font-family:inherit;font-size:13px;">
+      <button class="btn btn-primary" id="addPrecioBtn">+ Agregar</button>
+    </div>
+
+    <div style="overflow-x:auto;max-width:800px;">
+      <table class="panel-table">
+        <thead><tr><th>Descripción del arreglo</th><th>Precio</th><th>Tiempo de entrega</th><th></th></tr></thead>
+        <tbody>${filas || `<tr><td colspan="4" style="text-align:center;color:var(--ink-soft);padding:20px;">Aún no has agregado precios. Usa el formulario de arriba para empezar.</td></tr>`}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function addPrecio(descripcion, precio, tiempoEntrega){
+  const d = (descripcion||'').trim();
+  if(!d) return;
+  state.listaPrecios.push({id: uid(), descripcion: d, precio: Number(precio)||0, tiempoEntrega: (tiempoEntrega||'').trim()});
+  persist();
+}
+
+function updatePrecioDescripcion(id, descripcion){
+  const p = state.listaPrecios.find(x=>x.id===id);
+  if(p){ p.descripcion = descripcion; persist(); }
+}
+
+function updatePrecioMonto(id, precio){
+  const p = state.listaPrecios.find(x=>x.id===id);
+  if(p){ p.precio = Number(precio)||0; persist(); }
+}
+
+function updatePrecioTiempo(id, tiempoEntrega){
+  const p = state.listaPrecios.find(x=>x.id===id);
+  if(p){ p.tiempoEntrega = tiempoEntrega; persist(); }
+}
+
+function deletePrecio(id){
+  state.listaPrecios = state.listaPrecios.filter(p=>p.id!==id);
+  persist();
+}
+
 function renderCalendar(){
   const [y,m] = state.calendarMonth.split('-').map(Number);
   const firstDay = new Date(y, m-1, 1);
@@ -2757,6 +2831,42 @@ function attachListeners(){
 
   const calendarBtn = document.getElementById('calendarBtn');
   if(calendarBtn) calendarBtn.onclick = ()=>{ state.view='calendar'; state.mobileDetail=true; render(); };
+
+  const preciosBtn = document.getElementById('preciosBtn');
+  if(preciosBtn) preciosBtn.onclick = ()=>{ state.view='precios'; state.mobileDetail=true; render(); };
+
+  const addPrecioBtn = document.getElementById('addPrecioBtn');
+  if(addPrecioBtn) addPrecioBtn.onclick = ()=>{
+    const descInput = document.getElementById('nuevoPrecioDesc');
+    const montoInput = document.getElementById('nuevoPrecioMonto');
+    const tiempoInput = document.getElementById('nuevoPrecioTiempo');
+    addPrecio(descInput.value, montoInput.value, tiempoInput.value);
+    descInput.value=''; montoInput.value=''; tiempoInput.value='';
+    descInput.focus();
+  };
+  const nuevoPrecioDesc = document.getElementById('nuevoPrecioDesc');
+  if(nuevoPrecioDesc) nuevoPrecioDesc.onkeydown = (e)=>{
+    if(e.key==='Enter'){
+      e.preventDefault();
+      const montoInput = document.getElementById('nuevoPrecioMonto');
+      const tiempoInput = document.getElementById('nuevoPrecioTiempo');
+      addPrecio(nuevoPrecioDesc.value, montoInput.value, tiempoInput.value);
+      nuevoPrecioDesc.value=''; montoInput.value=''; tiempoInput.value='';
+      nuevoPrecioDesc.focus();
+    }
+  };
+  document.querySelectorAll('.precio-desc-input').forEach(inp=>{
+    inp.onchange = ()=> updatePrecioDescripcion(inp.dataset.id, inp.value);
+  });
+  document.querySelectorAll('.precio-monto-input').forEach(inp=>{
+    inp.onchange = ()=> updatePrecioMonto(inp.dataset.id, inp.value);
+  });
+  document.querySelectorAll('.precio-tiempo-input').forEach(inp=>{
+    inp.onchange = ()=> updatePrecioTiempo(inp.dataset.id, inp.value);
+  });
+  document.querySelectorAll('[data-remove-precio]').forEach(btn=>{
+    btn.onclick = ()=> deletePrecio(btn.dataset.removePrecio);
+  });
 
   const monthReportBtn = document.getElementById('monthReportBtn');
   if(monthReportBtn) monthReportBtn.onclick = ()=>{ state.view='monthreport'; state.mobileDetail=true; render(); };
