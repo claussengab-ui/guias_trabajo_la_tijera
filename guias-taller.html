@@ -2231,6 +2231,12 @@ function renderPanelGeneral(list){
         </td>
         <td>${g.fechaEntrega?formatDate(g.fechaEntrega):'—'}${urg==='atrasado'?' ⚠️':(urg==='hoy'?' ⏰':'')}</td>
         <td style="text-align:right;">${formatCLP(saldo)}</td>
+        <td style="text-align:center;">
+          ${g.estado==='Listo para retirar'
+            ? `<button class="btn btn-ghost avisar-listo-btn" data-id="${g.id}" title="Avisar por correo que está listo para retirar" style="padding:6px 10px;">📧</button>`
+            : `<button class="btn btn-ghost" disabled title="Solo disponible cuando el estado es 'Listo para retirar'" style="padding:6px 10px;opacity:.35;cursor:not-allowed;">📧</button>`
+          }
+        </td>
       </tr>
     `;
   }).join('');
@@ -2260,7 +2266,7 @@ function renderPanelGeneral(list){
       <table class="panel-table">
         <thead>
           <tr>
-            <th>Folio</th><th>Cliente</th><th>Prenda(s)</th><th>Estado</th><th>Entrega</th><th style="text-align:right;">Saldo</th>
+            <th>Folio</th><th>Cliente</th><th>Prenda(s)</th><th>Estado</th><th>Entrega</th><th style="text-align:right;">Saldo</th><th title="Avisar que está listo para retirar">Aviso</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
@@ -2982,7 +2988,7 @@ function attachListeners(){
 
   document.querySelectorAll('.panel-row').forEach(row=>{
     row.onclick = (e)=>{
-      if(e.target.closest('.panel-estado-select') || e.target.closest('.panel-encargado-select') || e.target.closest('.panel-encargado2-select') || e.target.closest('.panel-abono-input') || e.target.closest('.panel-metodo-select') || e.target.closest('.panel-pagosaldo-input') || e.target.closest('.panel-pagosaldo-metodo-select') || e.target.closest('.item-encargado-select')) return;
+      if(e.target.closest('.panel-estado-select') || e.target.closest('.panel-encargado-select') || e.target.closest('.panel-encargado2-select') || e.target.closest('.panel-abono-input') || e.target.closest('.panel-metodo-select') || e.target.closest('.panel-pagosaldo-input') || e.target.closest('.panel-pagosaldo-metodo-select') || e.target.closest('.item-encargado-select') || e.target.closest('.avisar-listo-btn')) return;
       openDetail(row.dataset.id);
     };
   });
@@ -3056,6 +3062,16 @@ function attachListeners(){
       e.stopPropagation();
       setItemEncargado(sel.dataset.guiaId, Number(sel.dataset.idx), sel.value);
       toast('Encargada de la prenda actualizada');
+    };
+  });
+
+  document.querySelectorAll('.avisar-listo-btn').forEach(btn=>{
+    btn.onclick = (e)=>{
+      e.stopPropagation();
+      const g = state.guias.find(x=>x.id===btn.dataset.id);
+      if(!g) return;
+      if(!g.clienteEmail){ toast('Esta guía no tiene un correo cargado'); return; }
+      sendEmail(g, buildReminderMessage(g), `Tu prenda ya está lista para retirar — Guía N° ${g.folio}`);
     };
   });
 
