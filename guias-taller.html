@@ -296,16 +296,17 @@
   .cal-grid-header{font-size:11px;text-transform:uppercase;color:var(--ink-soft);text-align:center;margin-bottom:4px;font-weight:600;}
   .cal-cell{
     background:var(--surface);border:1px solid var(--line);border-radius:8px;
-    min-height:80px;padding:6px;font-size:11px;overflow:hidden;
+    min-height:80px;padding:6px;font-size:11px;overflow:hidden;cursor:pointer;
   }
-  .cal-cell.cal-empty{background:transparent;border:none;}
+  .cal-cell.cal-empty{background:transparent;border:none;cursor:default;}
   .cal-cell.cal-today{border:2px solid var(--blue);}
+  .cal-cell.cal-selected{border:2px solid var(--brand-purple);background:var(--bg);}
   .cal-daynum{font-weight:700;font-size:12px;margin-bottom:4px;}
   .cal-entry{
     color:#fff;border-radius:4px;padding:2px 4px;margin-bottom:2px;font-size:10px;
     white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;
   }
-  .cal-more{font-size:10px;color:var(--ink-soft);}
+  .cal-more{font-size:10px;color:var(--blue-dark);font-weight:700;cursor:pointer;text-decoration:underline;}
   @media (max-width:700px){
     .cal-cell{min-height:56px;font-size:9px;}
     .cal-grid{gap:3px;}
@@ -473,6 +474,7 @@ let state = {
   simpleMode:false,
   simpleSearch:'',
   calendarMonth: new Date().getFullYear()+'-'+String(new Date().getMonth()+1).padStart(2,'0'),
+  calendarSelectedDay: null,
   reportMonth: new Date().getFullYear()+'-'+String(new Date().getMonth()+1).padStart(2,'0'),
   showPagoCostureras: false,
   showDetallePorPrenda: false
@@ -1126,6 +1128,14 @@ function saveForm(e){
     .map(it=>({prenda:(it.prenda||'').trim(), detalle:(it.detalle||'').trim(), fechaEntrega: it.fechaEntrega||'', horaEntrega: it.horaEntrega||'', fechaCustom: !!it.fechaCustom, valor: Number(it.valor)||0, encargado: it.encargado||'', encargadoCustom: !!it.encargadoCustom}))
     .filter(it=>it.prenda || it.detalle);
   const metodoPagoInput = f.querySelector('input[name="metodoPago"]:checked');
+  const nuevoAbono = Number(f.abono.value)||0;
+  const guiaExistente = state.editingId ? state.guias.find(x=>x.id===state.editingId) : null;
+  // Si el abono es nuevo o cambió de monto, se asume que se pagó hoy (o el día de ingreso, si es guía nueva).
+  // Si no cambió, se conserva la fecha que ya tenía registrada.
+  let abonoFecha = guiaExistente ? guiaExistente.abonoFecha : '';
+  if(nuevoAbono>0 && (!guiaExistente || guiaExistente.abono!==nuevoAbono)){
+    abonoFecha = guiaExistente ? todayISO() : (f.fechaCreacion.value || todayISO());
+  }
   const data = {
     clienteNombre: f.clienteNombre.value.trim(),
     clienteTelefono: f.clienteTelefono.value.trim(),
@@ -1135,7 +1145,8 @@ function saveForm(e){
     items: items.length ? items : [{prenda:'', detalle:''}],
     prenda: '', detalle: '', // campos antiguos, ya no se usan (compatibilidad)
     valor: Number(f.valor.value)||0,
-    abono: Number(f.abono.value)||0,
+    abono: nuevoAbono,
+    abonoFecha: abonoFecha,
     metodoPago: metodoPagoInput ? metodoPagoInput.value : '',
     estado: f.estado.value,
     encargado: f.encargado ? f.encargado.value : ''
@@ -1206,6 +1217,7 @@ function setAbono(id, monto){
   const g = state.guias.find(x=>x.id===id);
   if(g){
     g.abono = Number(monto)||0;
+    if(g.abono>0 && !g.abonoFecha) g.abonoFecha = todayISO();
     persistGuia(g);
   }
 }
@@ -1222,6 +1234,7 @@ function setPagoSaldo(id, monto){
   const g = state.guias.find(x=>x.id===id);
   if(g){
     g.pagoSaldoMonto = Number(monto)||0;
+    if(g.pagoSaldoMonto>0 && !g.pagoSaldoFecha) g.pagoSaldoFecha = todayISO();
     persistGuia(g);
   }
 }
@@ -1603,6 +1616,7 @@ async function sendToAppsScript(g){
       `${i+1}. ${it.prenda?it.prenda+' — ':''}${it.detalle||'(sin descripción)'}${it.valor?' — '+formatCLP(it.valor):''}`
     ).join('\n');
     const payload = {
+      accion: 'nuevaGuia',
       local: state.localName,
       folio: g.folio,
       localTelefono: state.localPhone,
@@ -1624,6 +1638,32 @@ async function sendToAppsScript(g){
     });
   }catch(e){
     console.error('Error enviando respaldo/correo automático', e);
+  }
+}
+
+async function sendAvisoListoAutomatico(g){
+  if(!state.appsScriptUrl){ toast('Falta configurar el link del script en Configuración'); return; }
+  if(!g.clienteEmail){ toast('Esta guía no tiene un correo cargado'); return; }
+  try{
+    const payload = {
+      accion: 'avisoListo',
+      local: state.localName,
+      folio: g.folio,
+      cliente: g.clienteNombre,
+      email: g.clienteEmail,
+      mensaje: buildReminderMessage(g).replace(/\*/g,''),
+      asunto: `Tu prenda ya está lista para retirar — Guía N° ${g.folio}`
+    };
+    await fetch(state.appsScriptUrl, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: {'Content-Type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify(payload)
+    });
+    toast('Correo de aviso enviado');
+  }catch(e){
+    console.error('Error enviando aviso automático', e);
+    toast('No se pudo enviar el aviso');
   }
 }
 
@@ -1708,7 +1748,7 @@ function csvEscape(val){
 }
 
 function exportBackupCSV(soloMes){
-  const headers = ['Folio','Cliente','Telefono','Email','Encargado','FechaIngreso','FechaEntrega','Estado','Prendas','ValorNeto','IVA19','ValorConIVA','Abono','MetodoPagoAbono','PagoSaldo','MetodoPagoSaldo','Saldo'];
+  const headers = ['Folio','Cliente','Telefono','Email','Encargado','FechaIngreso','FechaEntrega','Estado','Prendas','ValorNeto','IVA19','ValorConIVA','Abono','FechaAbono','MetodoPagoAbono','PagoSaldo','FechaPagoSaldo','MetodoPagoSaldo','Saldo'];
   const guiasFiltradas = soloMes ? state.guias.filter(g=>(g.fechaCreacion||'').slice(0,7)===soloMes) : state.guias;
   const rows = guiasFiltradas.map(g=>{
     const saldo = (Number(g.valor)||0) - (Number(g.abono)||0) - (Number(g.pagoSaldoMonto)||0);
@@ -1716,7 +1756,7 @@ function exportBackupCSV(soloMes){
     return [
       g.folio, g.clienteNombre, g.clienteTelefono||'', g.clienteEmail||'', g.encargado||'',
       formatDate(g.fechaCreacion), g.fechaEntrega?formatDate(g.fechaEntrega):'', g.estado,
-      prendas, valorSinIVA(g.valor), ivaDesdeConIVA(g.valor), g.valor, g.abono||0, g.metodoPago||'', g.pagoSaldoMonto||0, g.pagoSaldoMetodo||'', saldo
+      prendas, valorSinIVA(g.valor), ivaDesdeConIVA(g.valor), g.valor, g.abono||0, g.abonoFecha?formatDate(g.abonoFecha):'', g.metodoPago||'', g.pagoSaldoMonto||0, g.pagoSaldoFecha?formatDate(g.pagoSaldoFecha):'', g.pagoSaldoMetodo||'', saldo
     ].map(csvEscape).join(',');
   });
   const csv = '\uFEFF'+[headers.join(','), ...rows].join('\n');
@@ -2084,8 +2124,8 @@ function renderMain(filteredList){
             <div><div class="k">Valor sin IVA</div><div class="v mono" style="color:var(--ink-soft);">${formatCLP(valorSinIVA(g.valor))}</div></div>
           </div>
           <div class="money-row">
-            <div><div class="k">Abono</div><div class="v mono">${formatCLP(g.abono)} ${g.metodoPago==='efectivo'?'💵':(g.metodoPago==='tarjeta'?'💳':'')}</div></div>
-            <div><div class="k">Pago del saldo</div><div class="v mono">${formatCLP(g.pagoSaldoMonto||0)} ${g.pagoSaldoMetodo==='efectivo'?'💵':(g.pagoSaldoMetodo==='tarjeta'?'💳':'')}</div></div>
+            <div><div class="k">Abono</div><div class="v mono">${formatCLP(g.abono)} ${g.metodoPago==='efectivo'?'💵':(g.metodoPago==='tarjeta'?'💳':'')}${g.abonoFecha?` <span style="font-size:11px;color:var(--ink-soft);">(${formatDate(g.abonoFecha)})</span>`:''}</div></div>
+            <div><div class="k">Pago del saldo</div><div class="v mono">${formatCLP(g.pagoSaldoMonto||0)} ${g.pagoSaldoMetodo==='efectivo'?'💵':(g.pagoSaldoMetodo==='tarjeta'?'💳':'')}${g.pagoSaldoFecha?` <span style="font-size:11px;color:var(--ink-soft);">(${formatDate(g.pagoSaldoFecha)})</span>`:''}</div></div>
             <div><div class="k">Saldo</div><div class="saldo-box">${formatCLP(saldo)}</div></div>
           </div>
 
@@ -2286,21 +2326,27 @@ function renderMonthReport(){
   const valorConIvaTotal = guiasDelMes.reduce((s,g)=>s+g.valor,0);
   const valorNetoTotal = guiasDelMes.reduce((s,g)=>s+valorSinIVA(g.valor),0);
   const ivaTotal = valorConIvaTotal - valorNetoTotal;
-  const abonoTotal = guiasDelMes.reduce((s,g)=>s+(Number(g.abono)||0)+(Number(g.pagoSaldoMonto)||0),0);
-  const abonoEfectivoTotal = guiasDelMes.reduce((s,g)=>{
-    let t = 0;
-    if(g.metodoPago==='efectivo') t += Number(g.abono)||0;
-    if(g.pagoSaldoMetodo==='efectivo') t += Number(g.pagoSaldoMonto)||0;
-    return s+t;
-  },0);
-  const abonoTarjetaTotal = guiasDelMes.reduce((s,g)=>{
-    let t = 0;
-    if(g.metodoPago==='tarjeta') t += Number(g.abono)||0;
-    if(g.pagoSaldoMetodo==='tarjeta') t += Number(g.pagoSaldoMonto)||0;
-    return s+t;
-  },0);
-  const saldoTotal = valorConIvaTotal - abonoTotal;
+  // Cobrado hasta la fecha en las guías FACTURADAS este mes (sin importar cuándo se pagó cada parte)
+  const abonoTotalGuiasDelMes = guiasDelMes.reduce((s,g)=>s+(Number(g.abono)||0)+(Number(g.pagoSaldoMonto)||0),0);
+  const saldoTotal = valorConIvaTotal - abonoTotalGuiasDelMes;
   const totalPrendas = guiasDelMes.reduce((s,g)=>s+getItems(g).length,0);
+
+  // Dinero que REALMENTE entró este mes, según la fecha en que se pagó cada abono/saldo
+  // (puede incluir guías de otros meses que recién se pagaron o retiraron ahora)
+  let abonoEfectivoTotal = 0, abonoTarjetaTotal = 0;
+  state.guias.forEach(g=>{
+    const mesAbono = (g.abonoFecha || g.fechaCreacion || '').slice(0,7);
+    if(mesAbono===state.reportMonth && Number(g.abono)>0){
+      if(g.metodoPago==='efectivo') abonoEfectivoTotal += Number(g.abono)||0;
+      if(g.metodoPago==='tarjeta') abonoTarjetaTotal += Number(g.abono)||0;
+    }
+    const mesSaldo = (g.pagoSaldoFecha || '').slice(0,7);
+    if(mesSaldo===state.reportMonth && Number(g.pagoSaldoMonto)>0){
+      if(g.pagoSaldoMetodo==='efectivo') abonoEfectivoTotal += Number(g.pagoSaldoMonto)||0;
+      if(g.pagoSaldoMetodo==='tarjeta') abonoTarjetaTotal += Number(g.pagoSaldoMonto)||0;
+    }
+  });
+  const abonoTotal = abonoEfectivoTotal + abonoTarjetaTotal;
 
   const porEstado = {};
   ESTADOS.forEach(e=>{ porEstado[e.id] = guiasDelMes.filter(g=>g.estado===e.id).length; });
@@ -2358,6 +2404,7 @@ function renderMonthReport(){
       <button class="btn btn-ghost" id="reportNextBtn">Mes siguiente →</button>
     </div>
 
+    <div class="mono" style="font-size:11px;color:var(--ink-soft);margin-bottom:6px;font-weight:700;text-transform:uppercase;">📋 Trabajo facturado este mes (según fecha de ingreso de la prenda)</div>
     <div class="summary-grid">
       <div class="summary-card">
         <div class="num">${totalGuias}</div>
@@ -2379,21 +2426,25 @@ function renderMonthReport(){
         <div class="num">${formatCLP(ivaTotal)}</div>
         <div class="lbl">IVA del mes (19%)</div>
       </div>
-      <div class="summary-card">
-        <div class="num">${formatCLP(abonoTotal)}</div>
-        <div class="lbl">Abonado (total)</div>
+      <div class="summary-card" style="border-color:var(--mustard);">
+        <div class="num" style="color:var(--mustard);">${formatCLP(saldoTotal)}</div>
+        <div class="lbl">Saldo pendiente de estas guías (a hoy)</div>
       </div>
+    </div>
+
+    <div class="mono" style="font-size:11px;color:var(--ink-soft);margin:18px 0 6px;font-weight:700;text-transform:uppercase;">💰 Dinero que realmente entró este mes (según fecha del pago, sin importar cuándo se ingresó la prenda)</div>
+    <div class="summary-grid">
       <div class="summary-card" style="border-color:var(--green);">
         <div class="num" style="color:var(--green);">${formatCLP(abonoEfectivoTotal)}</div>
-        <div class="lbl">💵 Abonado en efectivo</div>
+        <div class="lbl">💵 Recibido en efectivo</div>
       </div>
       <div class="summary-card">
         <div class="num">${formatCLP(abonoTarjetaTotal)}</div>
-        <div class="lbl">💳 Abonado con tarjeta (ver Transbank)</div>
+        <div class="lbl">💳 Recibido con tarjeta (ver Transbank)</div>
       </div>
-      <div class="summary-card" style="border-color:var(--mustard);">
-        <div class="num" style="color:var(--mustard);">${formatCLP(saldoTotal)}</div>
-        <div class="lbl">Saldo pendiente del mes</div>
+      <div class="summary-card">
+        <div class="num">${formatCLP(abonoTotal)}</div>
+        <div class="lbl">Total recibido este mes</div>
       </div>
     </div>
 
@@ -2623,14 +2674,17 @@ function renderCalendar(){
   const monthNames = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   const todayStr = todayISO();
 
-  // Mapa fecha -> lista de {guia, item, prenda}
+  // Mapa fecha -> lista de guías (una sola vez por guía, aunque tenga varias prendas con la misma fecha)
   const map = {};
   state.guias.forEach(g=>{
+    const fechasDeEstaGuia = new Set();
     getItems(g).forEach(it=>{
       const d = it.fechaEntrega || g.fechaEntrega;
-      if(!d) return;
+      if(d) fechasDeEstaGuia.add(d);
+    });
+    fechasDeEstaGuia.forEach(d=>{
       if(!map[d]) map[d]=[];
-      map[d].push({g, prenda: it.prenda});
+      map[d].push(g);
     });
   });
 
@@ -2640,17 +2694,43 @@ function renderCalendar(){
     const dateStr = `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     const entries = map[dateStr] || [];
     const isToday = dateStr===todayStr;
+    const isSelected = state.calendarSelectedDay===dateStr;
     cells += `
-      <div class="cal-cell ${isToday?'cal-today':''}">
+      <div class="cal-cell ${isToday?'cal-today':''} ${isSelected?'cal-selected':''}" data-day="${dateStr}">
         <div class="cal-daynum">${d}</div>
-        ${entries.slice(0,3).map(e=>`<div class="cal-entry" data-id="${e.g.id}" style="background:${estadoColor(e.g.estado)};" title="${escapeHtml(e.g.clienteNombre)} — ${escapeHtml(e.prenda||'')}">N°${e.g.folio} ${escapeHtml(e.g.clienteNombre)}</div>`).join('')}
-        ${entries.length>3 ? `<div class="cal-more">+${entries.length-3} más</div>` : ''}
+        ${entries.slice(0,3).map(g=>`<div class="cal-entry" data-id="${g.id}" style="background:${estadoColor(g.estado)};" title="${escapeHtml(g.clienteNombre)}">N°${g.folio} ${escapeHtml(g.clienteNombre)}</div>`).join('')}
+        ${entries.length>3 ? `<div class="cal-more" data-day="${dateStr}">+${entries.length-3} más — ver todas</div>` : ''}
       </div>
     `;
   }
 
   const [py,pm] = m===1 ? [y-1,12] : [y,m-1];
   const [ny,nm] = m===12 ? [y+1,1] : [y,m+1];
+
+  const diaSeleccionado = state.calendarSelectedDay;
+  const guiasDelDia = diaSeleccionado ? (map[diaSeleccionado]||[]) : [];
+  const panelDia = diaSeleccionado ? `
+    <div class="settings-panel" style="flex-direction:column;align-items:flex-start;margin-top:16px;max-width:700px;">
+      <div style="display:flex;justify-content:space-between;width:100%;align-items:center;">
+        <label style="margin:0;">📅 Todas las guías del ${formatDate(diaSeleccionado)} (${guiasDelDia.length})</label>
+        <button class="item-remove" id="cerrarDiaBtn" title="Cerrar">✕</button>
+      </div>
+      <div style="width:100%;margin-top:8px;">
+        ${guiasDelDia.map(g=>{
+          const prendas = getItems(g).map(it=>it.prenda).filter(Boolean).join(', ') || '—';
+          return `
+            <div class="panel-row" data-id="${g.id}" style="display:flex;justify-content:space-between;gap:10px;padding:8px 4px;border-bottom:1px solid var(--line);cursor:pointer;">
+              <div>
+                <b class="mono">N°${g.folio}</b> — ${escapeHtml(g.clienteNombre)}
+                <div style="font-size:11.5px;color:var(--ink-soft);">${escapeHtml(prendas)}</div>
+              </div>
+              <span class="estado-dot" style="background:${estadoColor(g.estado)};align-self:center;"></span>
+            </div>
+          `;
+        }).join('') || `<div style="color:var(--ink-soft);padding:10px;">Sin guías ese día.</div>`}
+      </div>
+    </div>
+  ` : '';
 
   return `
     <button class="back-btn" id="backBtn">← Volver a la lista</button>
@@ -2663,7 +2743,8 @@ function renderCalendar(){
       <div>Lun</div><div>Mar</div><div>Mié</div><div>Jue</div><div>Vie</div><div>Sáb</div><div>Dom</div>
     </div>
     <div class="cal-grid">${cells}</div>
-    <div class="mono" style="font-size:11px;color:var(--ink-soft);margin-top:10px;">Haz clic en una entrega para abrir esa guía.</div>
+    <div class="mono" style="font-size:11px;color:var(--ink-soft);margin-top:10px;">Haz clic en un día para ver todas sus guías, o en una entrega para abrirla directo.</div>
+    ${panelDia}
   `;
 }
 
@@ -2902,6 +2983,7 @@ function attachListeners(){
     const [y,m] = state.calendarMonth.split('-').map(Number);
     const [py,pm] = m===1 ? [y-1,12] : [y,m-1];
     state.calendarMonth = `${py}-${String(pm).padStart(2,'0')}`;
+    state.calendarSelectedDay = null;
     render();
   };
   const calNextBtn = document.getElementById('calNextBtn');
@@ -2909,11 +2991,34 @@ function attachListeners(){
     const [y,m] = state.calendarMonth.split('-').map(Number);
     const [ny,nm] = m===12 ? [y+1,1] : [y,m+1];
     state.calendarMonth = `${ny}-${String(nm).padStart(2,'0')}`;
+    state.calendarSelectedDay = null;
     render();
   };
   document.querySelectorAll('.cal-entry').forEach(el=>{
-    el.onclick = ()=> openDetail(el.dataset.id);
+    el.onclick = (e)=>{ e.stopPropagation(); openDetail(el.dataset.id); };
   });
+
+  document.querySelectorAll('.cal-more').forEach(el=>{
+    el.onclick = (e)=>{
+      e.stopPropagation();
+      state.calendarSelectedDay = el.dataset.day;
+      render();
+    };
+  });
+
+  document.querySelectorAll('.cal-cell[data-day]').forEach(el=>{
+    el.onclick = ()=>{
+      state.calendarSelectedDay = el.dataset.day;
+      render();
+    };
+  });
+
+  const cerrarDiaBtn = document.getElementById('cerrarDiaBtn');
+  if(cerrarDiaBtn) cerrarDiaBtn.onclick = (e)=>{
+    e.stopPropagation();
+    state.calendarSelectedDay = null;
+    render();
+  };
 
   const scanBtn = document.getElementById('scanBtn');
   if(scanBtn) scanBtn.onclick = openScanner;
@@ -3070,8 +3175,7 @@ function attachListeners(){
       e.stopPropagation();
       const g = state.guias.find(x=>x.id===btn.dataset.id);
       if(!g) return;
-      if(!g.clienteEmail){ toast('Esta guía no tiene un correo cargado'); return; }
-      sendEmail(g, buildReminderMessage(g), `Tu prenda ya está lista para retirar — Guía N° ${g.folio}`);
+      sendAvisoListoAutomatico(g);
     };
   });
 
