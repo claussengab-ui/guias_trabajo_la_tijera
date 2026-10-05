@@ -914,12 +914,10 @@ function buildMessage(g){
 
 function buildReminderMessage(g){
   const saldo = (Number(g.valor)||0) - (Number(g.abono)||0) - (Number(g.pagoSaldoMonto)||0);
-  const d = daysUntil(g.fechaEntrega);
-  const cuando = d===0 ? 'hoy' : (d<0 ? `desde el ${formatDate(g.fechaEntrega)}` : `el ${formatDate(g.fechaEntrega)}`);
   const items = getItems(g);
   const prendasTexto = items.map(it=>it.prenda).filter(Boolean).join(', ');
   return `⏰ *${state.localName}*\n`+
-  `Hola ${g.clienteNombre}, te recordamos que tu(s) prenda(s) (Guía N° ${g.folio}) está(n) lista(s) o vence(n) ${cuando}.\n\n`+
+  `Hola ${g.clienteNombre}, te recordamos que tu(s) prenda(s) (Guía N° ${g.folio}) está(n) lista(s) para retirar.\n\n`+
   `${prendasTexto?('Prendas: '+prendasTexto+'\n'):''}Saldo pendiente: ${formatCLP(saldo)}\n\n`+
   `Te esperamos para que puedas retirarla(s). ¡Gracias! ✂️`;
 }
